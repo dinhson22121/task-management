@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Task Pool Manager — Backend Design</title>
+<style>
+  :root {
+    --ink:#1c2128; --sub:#57606a; --line:#d0d7de; --bg:#ffffff; --panel:#f6f8fa;
+    --accent:#0969da; --warn:#9a6700; --danger:#cf222e; --ok:#1a7f37;
+  }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color:var(--ink); background:var(--bg); max-width:960px; margin:40px auto; padding:0 24px; line-height:1.55; }
+  h1 { font-size:28px; border-bottom:2px solid var(--ink); padding-bottom:10px; }
+  h2 { font-size:20px; margin-top:48px; border-bottom:1px solid var(--line); padding-bottom:6px; }
+  h3 { font-size:16px; margin-top:28px; color:var(--ink); }
+  p, li { color:var(--ink); font-size:14.5px; }
+  .sub { color:var(--sub); font-size:14px; }
+  code, pre { font-family: "SF Mono", Consolas, Menlo, monospace; font-size:13px; }
+  code { background:var(--panel); padding:1px 5px; border-radius:4px; }
+  pre { background:var(--panel); padding:14px 16px; border-radius:8px; overflow-x:auto; border:1px solid var(--line); }
+  table { border-collapse: collapse; width:100%; margin:14px 0 20px; font-size:13.5px; }
+  th, td { border:1px solid var(--line); padding:7px 10px; text-align:left; vertical-align:top; }
+  th { background:var(--panel); font-weight:600; }
+  .tag { display:inline-block; font-size:11px; font-weight:600; padding:2px 8px; border-radius:10px; margin-right:4px;}
+  .tag-get{background:#ddf4ff;color:var(--accent);} .tag-post{background:#dafbe1;color:var(--ok);}
+  .tag-patch{background:#fff8c5;color:var(--warn);} .tag-delete{background:#ffebe9;color:var(--danger);}
+  .badge { display:inline-block; padding:2px 10px; border-radius:12px; font-size:12px; font-weight:600; }
+  .b-ok{background:#dafbe1;color:var(--ok);} .b-warn{background:#fff8c5;color:var(--warn);} .b-danger{background:#ffebe9;color:var(--danger);}
+  .callout { border-left:3px solid var(--accent); background:var(--panel); padding:10px 16px; border-radius:0 6px 6px 0; margin:16px 0; font-size:13.5px; }
+  svg { max-width:100%; }
+  .toc { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px 24px; font-size:14px; }
+  .toc a { color:var(--accent); text-decoration:none; }
+  footer { margin-top:60px; color:var(--sub); font-size:12px; border-top:1px solid var(--line); padding-top:12px; }
+</style>
+</head>
+<body>
+
+<h1>Task Pool Manager — Backend Design</h1>
+<p class="sub">Cross-platform (Windows / macOS / mobile) developer task-pool app · Jira + generic notification integration · v1.0 · 2026-07-06</p>
+
+<div class="toc">
+<strong>Contents</strong><br>
+1. <a href="#overview">Overview &amp; requirements recap</a><br>
+2. <a href="#stack">Tech stack</a><br>
+3. <a href="#arch">Architecture</a><br>
+4. <a href="#domain">Domain model</a><br>
+5. <a href="#schema">Database schema</a><br>
+6. <a href="#api">REST API</a><br>
+7. <a href="#realtime">Real-time sync (Socket.IO)</a><br>
+8. <a href="#deadline">Deadline warning engine</a><br>
+9. <a href="#capacity">Pool capacity enforcement</a><br>
+10. <a href="#integrations">External integrations (Jira + generic)</a><br>
+11. <a href="#nonfunc">Security, scaling, offline</a>
+</div>
+
+<h2 id="overview">1. Overview &amp; requirements recap</h2>
+<ul>
+<li><strong>Pools</strong> are created by the user with a fixed capacity (max number of tickets).</li>
+<li><strong>Tickets</strong> are added by pasting a Jira issue URL; the backend resolves it via the Jira API and stores title, description, and deadline.</li>
+<li><strong>Deadline warnings</strong> fire on a per-user configurable lead time, up to 2 hours before the deadline.</li>
+<li><strong>Capacity guard</strong>: if adding a ticket would exceed pool capacity, the request is rejected until the user removes an existing ticket.</li>
+<li><strong>Overdue state</strong>: once a deadline passes, a continuous (repeating, not one-shot) red warning is shown until the ticket is removed or its deadline is updated.</li>
+<li>Clients run on Windows, macOS, and mobile — the backend is a single multi-tenant service exposed over REST + a persistent real-time channel, so state stays in sync across a user's devices.</li>
+</ul>
+<div class="callout">"Nouns" in the original brief is treated here as a placeholder for a generic external notification/chat tool (Slack/Teams-style). The integration layer is built as a pluggable provider interface so any such tool — or Jira itself as a notification target — can be wired in without touching core logic.</div>
+
+<h2 id="stack">2. Tech stack</h2>
+<table>
+<tr><th>Layer</th><th>Choice</th><th>Why</th></tr>
+<tr><td>API</td><td>Node.js + TypeScript + Express (or Fastify)</td><td>Single codebase for API and background scheduler, fast to iterate, runs anywhere</td></tr>
+<tr><td>Real-time</td><td>Socket.IO</td><td>Push deadline/overdue events to desktop &amp; mobile clients without polling</td></tr>
+<tr><td>ORM / DB</td><td>Prisma (or Knex) + SQLite</td><td>Zero-ops embedded file DB — no separate DB server to run/deploy; fine for single-instance/per-team deployments</td></tr>
+<tr><td>Background jobs</td><td>node-cron (in-process)</td><td>Recurring deadline-scan job running inside the same Node process</td></tr>
+<tr><td>Cache</td><td>In-memory (Node <code>Map</code>/LRU) — optional</td><td>SQLite reads are already local-disk fast; no external cache tier needed at this scale</td></tr>
+<tr><td>Auth</td><td>JWT (app users) + OAuth2 (Jira, chat provider)</td><td>Standard, supports per-user third-party tokens</td></tr>
+<tr><td>Client shell</td><td>.NET MAUI or Electron</td><td>Not part of this doc, but backend is client-agnostic (REST + WebSocket)</td></tr>
+</table>
+<div class="callout">SQLite is a single-writer, single-file database — great for a self-hosted/single-instance backend (e.g. one server per team) with low ops overhead. It does <strong>not</strong> support running many API instances against the same DB file over a network. If you later need multiple horizontally-scaled API instances, plan to migrate to <code>libSQL</code>/Turso (SQLite-compatible, network-accessible) or Postgres — the Prisma layer makes that swap mostly a config change.</div>
+
+<h2 id="arch">3. Architecture</h2>
+<svg viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .box{fill:#f6f8fa;stroke:#d0d7de;stroke-width:1.5;rx:8;}
+    .accent{fill:#ddf4ff;stroke:#0969da;}
+    .lbl{font-family:-apple-system,Arial,sans-serif;font-size:12.5px;fill:#1c2128;}
+    .title{font-weight:600;}
+    .arrow{stroke:#57606a;stroke-width:1.5;marker-end:url(#arrow);fill:none;}
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#57606a"/>
+    </marker>
+  </defs>
+
+  <rect x="20" y="20" width="140" height="50" class="box"/>
+  <text x="30" y="40" class="lbl title">Windows client</text>
+  <text x="30" y="56" class="lbl">REST + WebSocket</text>
+
+  <rect x="20" y="90" width="140" height="50" class="box"/>
+  <text x="30" y="110" class="lbl title">macOS client</text>
+  <text x="30" y="126" class="lbl">REST + WebSocket</text>
+
+  <rect x="20" y="160" width="140" height="50" class="box"/>
+  <text x="30" y="180" class="lbl title">Mobile client</text>
+  <text x="30" y="196" class="lbl">REST + WebSocket</text>
+
+  <path d="M160,45 L260,110" class="arrow"/>
+  <path d="M160,115 L260,115" class="arrow"/>
+  <path d="M160,185 L260,120" class="arrow"/>
+
+  <rect x="260" y="60" width="180" height="110" class="box accent"/>
+  <text x="272" y="82" class="lbl title">API Gateway</text>
+  <text x="272" y="100" class="lbl">Node.js (Express)</text>
+  <text x="272" y="116" class="lbl">- Pools/Tickets REST</text>
+  <text x="272" y="132" class="lbl">- Auth (JWT)</text>
+  <text x="272" y="148" class="lbl">- Socket.IO server</text>
+
+  <path d="M440,115 L540,60" class="arrow"/>
+  <path d="M440,115 L540,115" class="arrow"/>
+  <path d="M440,115 L540,170" class="arrow"/>
+
+  <rect x="540" y="20" width="170" height="60" class="box"/>
+  <text x="552" y="42" class="lbl title">Application layer</text>
+  <text x="552" y="58" class="lbl">Pool/Ticket use cases,</text>
+  <text x="552" y="72" class="lbl">capacity &amp; deadline rules</text>
+
+  <rect x="540" y="95" width="170" height="55" class="box"/>
+  <text x="552" y="117" class="lbl title">Background worker</text>
+  <text x="552" y="133" class="lbl">node-cron deadline scan</text>
+
+  <rect x="540" y="160" width="170" height="55" class="box"/>
+  <text x="552" y="182" class="lbl title">Integration layer</text>
+  <text x="552" y="198" class="lbl">Jira client · Notifier(s)</text>
+
+  <path d="M710,50 L800,140" class="arrow"/>
+  <path d="M710,122 L800,145" class="arrow"/>
+  <rect x="800" y="110" width="80" height="60" class="box"/>
+  <text x="808" y="132" class="lbl title">SQLite</text>
+  <text x="808" y="148" class="lbl">file (Prisma)</text>
+
+  <path d="M625,215 L625,260" class="arrow"/>
+  <rect x="540" y="260" width="90" height="45" class="box"/>
+  <text x="550" y="280" class="lbl title">Jira API</text>
+  <text x="550" y="294" class="lbl">REST v3</text>
+
+  <path d="M660,205 L730,260" class="arrow"/>
+  <rect x="660" y="260" width="110" height="45" class="box"/>
+  <text x="668" y="280" class="lbl title">Notification</text>
+  <text x="668" y="294" class="lbl">provider (Slack/Teams-like)</text>
+
+  <text x="20" y="400" class="lbl" style="fill:#57606a;">All three clients hold a live Socket.IO connection so pool/ticket state (capacity full, warning, overdue) stays identical across a user's devices in real time.</text>
+</svg>
+
+<h2 id="domain">4. Domain model</h2>
+<table>
+<tr><th>Entity</th><th>Key fields</th><th>Notes</th></tr>
+<tr><td><code>User</code></td><td>Id, Email, DisplayName, DefaultWarningLeadMinutes</td><td>Lead time is user-configurable, capped at 120 min per requirement</td></tr>
+<tr><td><code>Pool</code></td><td>Id, OwnerId, Name, Capacity, CreatedAt</td><td>Initialized from user input (name + capacity)</td></tr>
+<tr><td><code>Ticket</code></td><td>Id, PoolId, JiraKey, JiraUrl, Title, Description, Deadline, Status, AddedAt, WarningLeadMinutes (override)</td><td>Status is derived: <code>Normal</code> / <code>Warning</code> / <code>Overdue</code></td></tr>
+<tr><td><code>IntegrationConnection</code></td><td>Id, UserId, Provider (Jira/Notifier), AuthTokenEncrypted, RefreshToken, ExpiresAt</td><td>One row per user per provider, tokens encrypted at rest</td></tr>
+<tr><td><code>NotificationEvent</code></td><td>Id, TicketId, Type (Warning/Overdue/CapacityBlocked), SentAt, Channel</td><td>Audit trail; also dedupes repeat pushes</td></tr>
+</table>
+
+<h2 id="schema">5. Database schema (SQLite DDL)</h2>
+<p class="sub">SQLite has no native UUID/TIMESTAMPTZ/BYTEA types — ids are stored as TEXT (app-generated UUIDs), timestamps as ISO-8601 TEXT, and encrypted tokens as BLOB. Foreign keys must be turned on explicitly (<code>PRAGMA foreign_keys = ON;</code>). Shown here as raw SQL; in practice this is generated from a Prisma schema.</p>
+<pre>PRAGMA foreign_keys = ON;
+
+CREATE TABLE users (
+  id TEXT PRIMARY KEY,                 -- uuid, generated in app code
+  email TEXT UNIQUE NOT NULL,
+  display_name TEXT NOT NULL,
+  default_warning_lead_minutes INTEGER NOT NULL DEFAULT 60
+    CHECK (default_warning_lead_minutes BETWEEN 1 AND 120),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE TABLE pools (
+  id TEXT PRIMARY KEY,
+  owner_id TEXT NOT NULL REFERENCES users(id),
+  name TEXT NOT NULL,
+  capacity INTEGER NOT NULL CHECK (capacity > 0),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE TABLE tickets (
+  id TEXT PRIMARY KEY,
+  pool_id TEXT NOT NULL REFERENCES pools(id) ON DELETE CASCADE,
+  jira_key TEXT NOT NULL,
+  jira_url TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  deadline TEXT NOT NULL,               -- ISO-8601 UTC
+  warning_lead_minutes INTEGER CHECK (warning_lead_minutes BETWEEN 1 AND 120),
+  status TEXT NOT NULL DEFAULT 'Normal', -- Normal | Warning | Overdue
+  added_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  UNIQUE (pool_id, jira_key)
+);
+CREATE INDEX idx_tickets_deadline ON tickets (deadline);
+
+CREATE TABLE integration_connections (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  provider TEXT NOT NULL,               -- 'jira' | 'notifier'
+  auth_token_encrypted BLOB NOT NULL,
+  refresh_token_encrypted BLOB,
+  expires_at TEXT,
+  UNIQUE (user_id, provider)
+);
+
+CREATE TABLE notification_events (
+  id TEXT PRIMARY KEY,
+  ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,                   -- Warning | Overdue | CapacityBlocked
+  sent_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  channel TEXT NOT NULL                 -- 'push' | 'chat' | 'email'
+);</pre>
+<p class="sub">Note: SQLite allows only one writer at a time. Wrap the capacity-check-then-insert in <code>BEGIN IMMEDIATE ... COMMIT</code> (via Prisma's interactive transactions) so concurrent add-ticket requests serialize instead of racing.</p>
+
+<h2 id="api">6. REST API</h2>
+<table>
+<tr><th>Endpoint</th><th>Description</th></tr>
+<tr><td><span class="tag tag-post">POST</span> <code>/pools</code></td><td>Create a pool: <code>{ name, capacity }</code></td></tr>
+<tr><td><span class="tag tag-get">GET</span> <code>/pools/{id}</code></td><td>Get pool details + current ticket count</td></tr>
+<tr><td><span class="tag tag-patch">PATCH</span> <code>/pools/{id}</code></td><td>Rename pool / change capacity</td></tr>
+<tr><td><span class="tag tag-get">GET</span> <code>/pools/{id}/tickets</code></td><td>List tickets with computed status (Normal/Warning/Overdue)</td></tr>
+<tr><td><span class="tag tag-post">POST</span> <code>/pools/{id}/tickets</code></td><td>Add ticket from a pasted Jira URL: <code>{ jiraUrl }</code>. Returns <code>409 Conflict</code> + <code>PoolCapacityExceeded</code> if full</td></tr>
+<tr><td><span class="tag tag-patch">PATCH</span> <code>/pools/{id}/tickets/{ticketId}</code></td><td>Update deadline or per-ticket warning lead time</td></tr>
+<tr><td><span class="tag tag-delete">DELETE</span> <code>/pools/{id}/tickets/{ticketId}</code></td><td>Remove ticket (also clears Overdue state)</td></tr>
+<tr><td><span class="tag tag-post">POST</span> <code>/integrations/jira/connect</code></td><td>Start Jira OAuth handshake</td></tr>
+<tr><td><span class="tag tag-post">POST</span> <code>/integrations/notifier/connect</code></td><td>Connect generic chat/notification provider</td></tr>
+<tr><td><span class="tag tag-get">GET</span> <code>/users/me/settings</code></td><td>Get/set default warning lead time (≤120 min)</td></tr>
+</table>
+
+<h3>Add-ticket flow (capacity check)</h3>
+<pre>POST /pools/{id}/tickets
+{ "jiraUrl": "https://yourorg.atlassian.net/browse/ENG-482" }
+
+1. Parse issue key (ENG-482) from URL.
+2. If pool.ticketCount >= pool.capacity -> 409 Conflict
+   { "error": "PoolCapacityExceeded", "capacity": 10, "current": 10 }
+3. Else call Jira API GET /rest/api/3/issue/ENG-482
+4. Map summary/description/duedate -> Ticket, insert inside a SQLite
+   BEGIN IMMEDIATE transaction that re-checks count (guards races from
+   two devices adding at once, since SQLite serializes writers anyway).
+5. Broadcast TicketAdded over Socket.IO to all of the user's connected clients.</pre>
+
+<h2 id="realtime">7. Real-time sync (Socket.IO)</h2>
+<p>Each authenticated client opens a Socket.IO connection and joins a room keyed by <code>userId</code> (or <code>poolId</code>). Server-pushed events:</p>
+<table>
+<tr><th>Event</th><th>Payload</th><th>Trigger</th></tr>
+<tr><td><code>TicketWarning</code></td><td>ticketId, deadline, minutesRemaining</td><td>Background scan crosses the lead-time threshold</td></tr>
+<tr><td><code>TicketOverdue</code></td><td>ticketId, deadline</td><td>Repeats every N seconds/minutes while the ticket remains in the pool and unresolved — drives the continuous red banner</td></tr>
+<tr><td><code>TicketResolved</code></td><td>ticketId</td><td>Ticket removed or deadline pushed forward; clears the warning/overdue UI</td></tr>
+<tr><td><code>PoolCapacityChanged</code></td><td>poolId, current, capacity</td><td>Ticket added/removed, so all devices' "add" button enables/disables consistently</td></tr>
+</table>
+
+<h2 id="deadline">8. Deadline warning engine</h2>
+<p>A <code>node-cron</code> job runs in-process every 30–60 seconds and evaluates every active ticket:</p>
+<pre>cron.schedule('*/30 * * * * *', async () => {
+  const tickets = await prisma.ticket.findMany({ where: { status: { not: 'Resolved' } } });
+  const now = new Date();
+
+  for (const ticket of tickets) {
+    const lead = ticket.warningLeadMinutes ?? ticket.pool.owner.defaultWarningLeadMinutes; // 1-120 min
+
+    if (now >= ticket.deadline) {
+      if (ticket.status !== 'Overdue') {
+        await prisma.ticket.update({ where: { id: ticket.id }, data: { status: 'Overdue' } });
+        io.to(ticket.poolId).emit('TicketOverdue', { ticketId: ticket.id, deadline: ticket.deadline }); // first fire
+      } else {
+        io.to(ticket.poolId).emit('TicketOverdue', { ticketId: ticket.id, deadline: ticket.deadline }); // repeat -> continuous red banner
+      }
+    } else if (now >= new Date(ticket.deadline.getTime() - lead * 60000)) {
+      if (ticket.status !== 'Warning') {
+        await prisma.ticket.update({ where: { id: ticket.id }, data: { status: 'Warning' } });
+        io.to(ticket.poolId).emit('TicketWarning', { ticketId: ticket.id, deadline: ticket.deadline });
+      }
+    }
+    // else: status stays 'Normal', nothing to do
+  }
+});</pre>
+<p class="sub">The "continuous" overdue warning is implemented as a repeating push rather than a one-shot event — the client renders it as a persistent red banner as long as it keeps receiving/holding that state, and clears it only on <code>TicketResolved</code>.</p>
+
+<h2 id="capacity">9. Pool capacity enforcement</h2>
+<ul>
+<li>Capacity check happens <strong>server-side</strong> inside the same DB transaction as the insert (not just in the client), so two devices adding simultaneously can't both slip past a full pool.</li>
+<li>Rejection response is explicit (<code>PoolCapacityExceeded</code>) so the client can prompt "remove a ticket first" rather than silently failing.</li>
+<li>Capacity changes (<code>PATCH /pools/{id}</code>) are allowed at any time; shrinking capacity below the current ticket count is accepted but blocks further additions until the user is back under the new limit.</li>
+</ul>
+
+<h2 id="integrations">10. External integrations</h2>
+<h3>Jira</h3>
+<ul>
+<li>OAuth 2.0 (3LO) per user; tokens stored encrypted in <code>integration_connections</code>.</li>
+<li>Issue resolution: parse the pasted URL for the issue key, call <code>GET /rest/api/3/issue/{key}</code>, map <code>fields.summary</code>, <code>fields.description</code>, <code>fields.duedate</code> → ticket.</li>
+<li>Optional: subscribe to Jira webhooks (<code>issue_updated</code>) to keep the stored deadline in sync if it changes on the Jira side, instead of relying purely on polling.</li>
+</ul>
+<h3>Generic notification provider (the "Nouns" slot)</h3>
+<p>Modeled as a pluggable interface so any chat/notification tool can be wired in without touching pool/ticket logic:</p>
+<pre>export interface NotificationProvider {
+  readonly providerName: string;
+  send(event: NotificationEvent, recipient: User): Promise&lt;void&gt;;
+}
+
+// Implementations: SlackNotifier, TeamsNotifier, PushNotifier, EmailNotifier, ...
+// Resolved per user at runtime from their IntegrationConnection.provider field,
+// e.g. via a small factory/registry keyed by provider name.</pre>
+<p class="sub">This keeps the door open for whichever tool "Nouns" actually refers to — swap in a concrete implementation without changing the domain or API layer.</p>
+
+<h2 id="nonfunc">11. Security, scaling, offline</h2>
+<table>
+<tr><th>Concern</th><th>Approach</th></tr>
+<tr><td>Auth</td><td>JWT access + refresh tokens for app users; OAuth2 for Jira/notifier, tokens encrypted at rest (Node <code>crypto</code>/libsodium, key from env/secrets manager)</td></tr>
+<tr><td>Scaling</td><td>Single Node process owns the SQLite file (one instance per deployment/team). This is intentionally simple — no backplane needed since there's only one process to broadcast from. If you outgrow it, move to libSQL/Turso or Postgres and add a Socket.IO Redis adapter for multi-instance fan-out</td></tr>
+<tr><td>Jira rate limits</td><td>Cache issue lookups briefly in-memory (Node <code>Map</code> with TTL); batch/backoff on 429s; webhook-driven updates reduce polling</td></tr>
+<tr><td>Offline clients</td><td>On reconnect, client calls <code>GET /pools/{id}/tickets</code> to resync full state, then resumes the Socket.IO stream for deltas</td></tr>
+<tr><td>Multi-device consistency</td><td>All writes go through the same API + DB; Socket.IO room broadcast keeps Windows/macOS/mobile clients visually identical within ~1s</td></tr>
+<tr><td>Backups</td><td>SQLite is a single file — back it up with simple file-copy/snapshot on an interval (or use <code>litestream</code> for continuous replication to S3-compatible storage)</td></tr>
+<tr><td>Input validation</td><td>Strict Jira URL/key regex validation before calling out to Jira, to avoid SSRF via arbitrary URLs</td></tr>
+</table>
+
+<footer>Task Pool Manager — Backend Design · generated 2026-07-06</footer>
+</body>
+</html>

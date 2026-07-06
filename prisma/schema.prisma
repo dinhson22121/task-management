@@ -1,0 +1,83 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "darwin", "darwin-arm64", "windows"]
+}
+
+model User {
+  id                          String   @id @default(uuid())
+  email                       String   @unique
+  displayName                 String
+  defaultWarningLeadMinutes   Int      @default(60)
+  appMode                     String   @default("demo")
+  workingHourStart            Int      @default(480)
+  workingHourEnd              Int      @default(1020)
+  timeFormat                  String   @default("24h")
+  jiraPollIntervalSeconds     Int      @default(300)
+  createdAt                   DateTime @default(now())
+  pools                       Pool[]
+  integrationConnections      IntegrationConnection[]
+}
+
+model Pool {
+  id        String   @id @default(uuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id])
+  name      String
+  capacity  Int
+  createdAt DateTime @default(now())
+  tickets   Ticket[]
+}
+
+model Ticket {
+  id                  String   @id @default(uuid())
+  poolId              String
+  pool                Pool     @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  jiraKey             String
+  jiraUrl             String
+  title               String
+  description         String?
+  deadline            DateTime
+  warningLeadMinutes  Int?
+  status              String   @default("Normal")
+  addedAt             DateTime @default(now())
+  doneAt              DateTime?
+  note                String?
+
+  @@unique([poolId, jiraKey])
+  @@index([deadline])
+}
+
+model IntegrationConnection {
+  id                     String    @id @default(uuid())
+  userId                 String
+  user                   User      @relation(fields: [userId], references: [id])
+  provider               String
+  authTokenEncrypted     Bytes
+  refreshTokenEncrypted  Bytes?
+  expiresAt              DateTime?
+  cloudId                String?
+  siteUrl                String?
+  siteName               String?
+
+  @@unique([userId, provider])
+}
+
+model JiraConfig {
+  id                    String   @id @default("singleton")
+  clientId              String
+  clientSecretEncrypted Bytes
+  updatedAt             DateTime @updatedAt
+}
+
+model NotificationEvent {
+  id        String   @id @default(uuid())
+  ticketId  String
+  type      String
+  sentAt    DateTime @default(now())
+  channel   String
+}

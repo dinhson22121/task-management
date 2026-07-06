@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Task Pool Manager — Wireframes</title>
+<style>
+  :root { --ink:#33383f; --line:#9aa1a9; --panel:#eceef0; --sub:#70777f; --danger:#c1372b; --warn:#b8860b; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color:var(--ink); background:#fff; max-width:980px; margin:40px auto; padding:0 24px; line-height:1.5; }
+  h1 { font-size:26px; border-bottom:2px solid var(--ink); padding-bottom:10px; }
+  h2 { font-size:18px; margin-top:52px; }
+  p.sub { color:var(--sub); font-size:13.5px; margin-top:2px; }
+  .frame { border:1px solid var(--line); border-radius:6px; padding:14px; background:#fbfbfc; }
+  .caption { font-size:12.5px; color:var(--sub); margin-top:8px; }
+  .steps { font-size:13.5px; color:var(--sub); }
+  footer { margin-top:60px; color:var(--sub); font-size:12px; border-top:1px solid var(--line); padding-top:12px; }
+  svg { display:block; max-width:100%; }
+</style>
+</head>
+<body>
+
+<h1>Task Pool Manager — Wireframes</h1>
+<p class="sub">Low-fidelity static screens covering the main flow · Windows / macOS / mobile · v1.0 · 2026-07-06</p>
+<p class="steps">Flow: Pool list → Create pool → Pool detail (paste Jira link to add ticket) → capacity-blocked state → overdue continuous red warning.</p>
+
+<!-- SCREEN 1: POOL LIST -->
+<h2>1. Pool list (home screen)</h2>
+<div class="frame">
+<svg viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .win{fill:#fff;stroke:#9aa1a9;stroke-width:1.5;}
+    .bar{fill:#e4e6e8;stroke:#9aa1a9;stroke-width:1;}
+    .card{fill:#fff;stroke:#9aa1a9;stroke-width:1.3;stroke-dasharray:0;}
+    .ph{fill:none;stroke:#9aa1a9;stroke-width:1;stroke-dasharray:2,2;}
+    .lbl{font-family:-apple-system,Arial,sans-serif;font-size:12.5px;fill:#33383f;}
+    .lbl-b{font-family:-apple-system,Arial,sans-serif;font-size:13.5px;fill:#33383f;font-weight:600;}
+    .lbl-sub{font-family:-apple-system,Arial,sans-serif;font-size:11px;fill:#70777f;}
+    .btn{fill:#fff;stroke:#33383f;stroke-width:1.3;}
+    .pill{fill:#eceef0;stroke:#9aa1a9;stroke-width:1;}
+    .bar-fill{fill:#c8ccd0;}
+  </style>
+
+  <rect x="0.5" y="0.5" width="899" height="519" class="win"/>
+  <rect x="0.5" y="0.5" width="899" height="46" class="bar"/>
+  <text x="16" y="29" class="lbl-b">Task Pool Manager</text>
+  <rect x="770" y="12" width="110" height="24" class="btn" rx="4"/>
+  <text x="785" y="28" class="lbl">+ New Pool</text>
+
+  <!-- Sidebar -->
+  <rect x="0.5" y="46.5" width="180" height="473" class="bar"/>
+  <text x="16" y="76" class="lbl-b">Pools</text>
+  <rect x="12" y="90" width="156" height="30" class="pill" rx="4"/>
+  <text x="20" y="109" class="lbl">Sprint 24 (7/10)</text>
+  <rect x="12" y="126" width="156" height="30" class="pill" rx="4"/>
+  <text x="20" y="145" class="lbl">Bugfix Queue (3/5)</text>
+  <rect x="12" y="162" width="156" height="30" class="pill" rx="4"/>
+  <text x="20" y="181" class="lbl">On-call (10/10)</text>
+  <text x="150" y="181" class="lbl-sub" fill="#c1372b">full</text>
+
+  <!-- Main area: pool cards -->
+  <text x="200" y="80" class="lbl-b">Your pools</text>
+
+  <rect x="200" y="96" width="330" height="120" class="card" rx="6"/>
+  <text x="216" y="122" class="lbl-b">Sprint 24</text>
+  <rect x="216" y="134" width="298" height="10" class="ph"/>
+  <rect x="216" y="134" width="209" height="10" class="bar-fill"/>
+  <text x="216" y="162" class="lbl-sub">7 / 10 tickets used</text>
+  <text x="216" y="180" class="lbl-sub">2 warning · 0 overdue</text>
+  <rect x="420" y="196" width="94" height="22" class="btn" rx="4"/>
+  <text x="432" y="211" class="lbl">Open →</text>
+
+  <rect x="546" y="96" width="330" height="120" class="card" rx="6"/>
+  <text x="562" y="122" class="lbl-b">Bugfix Queue</text>
+  <rect x="562" y="134" width="298" height="10" class="ph"/>
+  <rect x="562" y="134" width="180" height="10" class="bar-fill"/>
+  <text x="562" y="162" class="lbl-sub">3 / 5 tickets used</text>
+  <text x="562" y="180" class="lbl-sub">0 warning · 0 overdue</text>
+  <rect x="766" y="196" width="94" height="22" class="btn" rx="4"/>
+  <text x="778" y="211" class="lbl">Open →</text>
+
+  <rect x="200" y="232" width="330" height="120" class="card" rx="6" stroke="#c1372b"/>
+  <text x="216" y="258" class="lbl-b">On-call</text>
+  <rect x="216" y="270" width="298" height="10" class="ph"/>
+  <rect x="216" y="270" width="298" height="10" fill="#c1372b"/>
+  <text x="216" y="298" class="lbl-sub" fill="#c1372b">10 / 10 — pool full</text>
+  <text x="216" y="316" class="lbl-sub" fill="#c1372b">1 overdue ⚠</text>
+  <rect x="420" y="332" width="94" height="22" class="btn" rx="4"/>
+  <text x="432" y="347" class="lbl">Open →</text>
+</svg>
+</div>
+<p class="caption">Sidebar and card grid both show live capacity ("used / capacity") and rollups of warning/overdue counts. Pools at or over capacity are flagged red so the user knows before opening them.</p>
+
+<!-- SCREEN 2: CREATE POOL -->
+<h2>2. Create pool</h2>
+<div class="frame">
+<svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .win{fill:#fff;stroke:#9aa1a9;stroke-width:1.5;}
+    .modal{fill:#fff;stroke:#33383f;stroke-width:1.5;}
+    .field{fill:#fff;stroke:#9aa1a9;stroke-width:1.2;}
+    .lbl{font-family:-apple-system,Arial,sans-serif;font-size:12.5px;fill:#33383f;}
+    .lbl-b{font-family:-apple-system,Arial,sans-serif;font-size:14px;fill:#33383f;font-weight:600;}
+    .lbl-sub{font-family:-apple-system,Arial,sans-serif;font-size:11px;fill:#70777f;}
+    .btn{fill:#33383f;}
+    .btn-out{fill:#fff;stroke:#9aa1a9;stroke-width:1.2;}
+    .overlay{fill:#33383f;fill-opacity:0.08;}
+  </style>
+  <rect x="0.5" y="0.5" width="899" height="379" class="win"/>
+  <rect x="0" y="0" width="900" height="380" class="overlay"/>
+
+  <rect x="280" y="60" width="340" height="260" class="modal" rx="8"/>
+  <text x="304" y="96" class="lbl-b">New pool</text>
+
+  <text x="304" y="128" class="lbl">Pool name</text>
+  <rect x="304" y="136" width="292" height="30" class="field" rx="4"/>
+  <text x="314" y="156" class="lbl-sub">e.g. Sprint 25</text>
+
+  <text x="304" y="188" class="lbl">Capacity (max tickets)</text>
+  <rect x="304" y="196" width="292" height="30" class="field" rx="4"/>
+  <text x="314" y="216" class="lbl-sub">e.g. 10</text>
+
+  <text x="304" y="248" class="lbl">Default warning lead time</text>
+  <rect x="304" y="256" width="292" height="30" class="field" rx="4"/>
+  <text x="314" y="276" class="lbl-sub">Minutes before deadline (max 120)</text>
+
+  <rect x="304" y="300" width="80" height="10" fill="none"/>
+  <rect x="424" y="300" width="84" height="30" class="btn-out" rx="4"/>
+  <text x="438" y="320" class="lbl">Cancel</text>
+  <rect x="512" y="300" width="84" height="30" class="btn" rx="4"/>
+  <text x="530" y="320" class="lbl" fill="#fff">Create</text>
+</svg>
+</div>
+<p class="caption">Capacity and default warning lead time (≤120 min) are set at pool creation, per the requirement that lead time is user-configurable.</p>
+
+<!-- SCREEN 3: POOL DETAIL / ADD TICKET -->
+<h2>3. Pool detail — add ticket via Jira link</h2>
+<div class="frame">
+<svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .win{fill:#fff;stroke:#9aa1a9;stroke-width:1.5;}
+    .bar{fill:#e4e6e8;stroke:#9aa1a9;stroke-width:1;}
+    .field{fill:#fff;stroke:#9aa1a9;stroke-width:1.2;}
+    .row{fill:#fff;stroke:#c9cdd1;stroke-width:1;}
+    .lbl{font-family:-apple-system,Arial,sans-serif;font-size:12.5px;fill:#33383f;}
+    .lbl-b{font-family:-apple-system,Arial,sans-serif;font-size:14px;fill:#33383f;font-weight:600;}
+    .lbl-sub{font-family:-apple-system,Arial,sans-serif;font-size:11px;fill:#70777f;}
+    .btn{fill:#33383f;}
+    .badge-n{fill:#eceef0;stroke:#9aa1a9;}
+    .badge-w{fill:#fdf1d8;stroke:#b8860b;}
+    .badge-o{fill:#fbe1de;stroke:#c1372b;}
+  </style>
+
+  <rect x="0.5" y="0.5" width="899" height="559" class="win"/>
+  <rect x="0.5" y="0.5" width="899" height="46" class="bar"/>
+  <text x="16" y="29" class="lbl-b">Sprint 24</text>
+  <text x="120" y="29" class="lbl-sub">7 / 10 tickets</text>
+
+  <!-- Add ticket bar -->
+  <text x="16" y="80" class="lbl-b">Add ticket</text>
+  <rect x="16" y="92" width="600" height="34" class="field" rx="4"/>
+  <text x="28" y="114" class="lbl-sub">Paste Jira link — e.g. https://yourorg.atlassian.net/browse/ENG-482</text>
+  <rect x="626" y="92" width="90" height="34" class="btn" rx="4"/>
+  <text x="644" y="114" class="lbl" fill="#fff">Add</text>
+
+  <!-- Ticket list header -->
+  <line x1="16" y1="150" x2="884" y2="150" stroke="#c9cdd1"/>
+  <text x="16" y="172" class="lbl-sub">TICKET</text>
+  <text x="440" y="172" class="lbl-sub">DEADLINE</text>
+  <text x="600" y="172" class="lbl-sub">STATUS</text>
+  <text x="760" y="172" class="lbl-sub">ACTIONS</text>
+
+  <!-- Row 1: normal -->
+  <rect x="16" y="184" width="868" height="52" class="row"/>
+  <text x="28" y="206" class="lbl-b">ENG-482</text>
+  <text x="28" y="222" class="lbl-sub">Fix pagination bug on issue list</text>
+  <text x="440" y="214" class="lbl">Jul 8, 14:00</text>
+  <rect x="600" y="198" width="66" height="22" class="badge-n" rx="11"/>
+  <text x="613" y="213" class="lbl">Normal</text>
+  <text x="760" y="214" class="lbl-sub">Edit · Remove</text>
+
+  <!-- Row 2: warning -->
+  <rect x="16" y="240" width="868" height="52" class="row"/>
+  <text x="28" y="262" class="lbl-b">ENG-491</text>
+  <text x="28" y="278" class="lbl-sub">Migrate auth token storage</text>
+  <text x="440" y="270" class="lbl">Jul 6, 15:30</text>
+  <rect x="600" y="254" width="72" height="22" class="badge-w" rx="11"/>
+  <text x="611" y="269" class="lbl" fill="#8a6300">Warning</text>
+  <text x="760" y="270" class="lbl-sub">Edit · Remove</text>
+
+  <!-- Row 3: overdue -->
+  <rect x="16" y="296" width="868" height="52" class="row" stroke="#c1372b" stroke-width="1.5"/>
+  <text x="28" y="318" class="lbl-b">ENG-455</text>
+  <text x="28" y="334" class="lbl-sub">Hotfix: crash on ticket delete</text>
+  <text x="440" y="326" class="lbl" fill="#c1372b">Jul 6, 09:00 (overdue)</text>
+  <rect x="600" y="310" width="66" height="22" class="badge-o" rx="11"/>
+  <text x="611" y="325" class="lbl" fill="#c1372b">Overdue</text>
+  <text x="760" y="326" class="lbl-sub">Edit · Remove</text>
+
+  <text x="16" y="400" class="lbl-sub">... remaining rows to fill capacity (7/10) ...</text>
+</svg>
+</div>
+<p class="caption">Adding a ticket only needs a pasted Jira URL — the backend resolves title, description, and deadline. Status badges reflect Normal / Warning / Overdue in place, no separate screen needed.</p>
+
+<!-- SCREEN 4: CAPACITY BLOCKED -->
+<h2>4. Capacity-blocked state</h2>
+<div class="frame">
+<svg viewBox="0 0 900 260" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .win{fill:#fff;stroke:#9aa1a9;stroke-width:1.5;}
+    .field{fill:#f3f3f3;stroke:#c9cdd1;stroke-width:1.2;}
+    .lbl{font-family:-apple-system,Arial,sans-serif;font-size:12.5px;fill:#33383f;}
+    .lbl-b{font-family:-apple-system,Arial,sans-serif;font-size:14px;fill:#33383f;font-weight:600;}
+    .btn-dis{fill:#eceef0;stroke:#c9cdd1;stroke-width:1.2;}
+    .toast{fill:#fbe1de;stroke:#c1372b;stroke-width:1.3;}
+  </style>
+  <rect x="0.5" y="0.5" width="899" height="259" class="win"/>
+  <text x="16" y="36" class="lbl-b">On-call</text>
+
+  <rect x="16" y="50" width="600" height="34" class="field" rx="4"/>
+  <text x="28" y="72" class="lbl" fill="#9aa1a9">Paste Jira link — (disabled, pool is full)</text>
+  <rect x="626" y="50" width="90" height="34" class="btn-dis" rx="4"/>
+  <text x="644" y="72" class="lbl" fill="#9aa1a9">Add</text>
+
+  <rect x="16" y="100" width="700" height="56" class="toast" rx="6"/>
+  <text x="32" y="124" class="lbl-b" fill="#c1372b">Pool is full (10/10)</text>
+  <text x="32" y="144" class="lbl" fill="#c1372b">Remove a ticket below before adding a new one.</text>
+</svg>
+</div>
+<p class="caption">Server rejects the add with <code>409 PoolCapacityExceeded</code>; the UI disables the add control and surfaces the reason instead of failing silently.</p>
+
+<!-- SCREEN 5: OVERDUE CONTINUOUS WARNING -->
+<h2>5. Overdue ticket — continuous red warning</h2>
+<div class="frame">
+<svg viewBox="0 0 900 220" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .win{fill:#fff;stroke:#9aa1a9;stroke-width:1.5;}
+    .band{fill:#c1372b;}
+    .lbl{font-family:-apple-system,Arial,sans-serif;font-size:12.5px;fill:#fff;}
+    .lbl-b{font-family:-apple-system,Arial,sans-serif;font-size:14px;fill:#fff;font-weight:600;}
+    .row{fill:#fff;stroke:#c1372b;stroke-width:1.6;}
+    .lbl2{font-family:-apple-system,Arial,sans-serif;font-size:12.5px;fill:#33383f;}
+    .lbl2-b{font-family:-apple-system,Arial,sans-serif;font-size:13.5px;fill:#33383f;font-weight:600;}
+    .btn{fill:#33383f;}
+    .btn-out{fill:#fff;stroke:#33383f;stroke-width:1.2;}
+  </style>
+  <rect x="0.5" y="0.5" width="899" height="219" class="win"/>
+
+  <rect x="0" y="0" width="900" height="40" class="band"/>
+  <text x="16" y="26" class="lbl-b">⚠ 1 ticket overdue — resolve to clear this banner</text>
+
+  <rect x="16" y="56" width="868" height="60" class="row"/>
+  <text x="28" y="80" class="lbl2-b" fill="#c1372b">ENG-455 — Hotfix: crash on ticket delete</text>
+  <text x="28" y="100" class="lbl2" fill="#c1372b">Deadline was Jul 6, 09:00 — 3h 40m overdue</text>
+  <rect x="700" y="72" width="80" height="28" class="btn-out" rx="4"/>
+  <text x="712" y="90" class="lbl2">Remove</text>
+  <rect x="788" y="72" width="96" height="28" class="btn" rx="4"/>
+  <text x="798" y="90" class="lbl" fill="#fff">Update deadline</text>
+
+  <text x="16" y="150" class="lbl2" fill="#70777f">Banner and row border stay red and keep re-appearing (per the</text>
+  <text x="16" y="168" class="lbl2" fill="#70777f">backend's repeating TicketOverdue push) until the ticket is removed</text>
+  <text x="16" y="186" class="lbl2" fill="#70777f">or its deadline is updated — it does not auto-dismiss on its own.</text>
+</svg>
+</div>
+<p class="caption">This is the visual expression of the backend's repeating <code>TicketOverdue</code> Socket.IO event — the client keeps the red state rendered as long as it keeps receiving/holding it, and clears it only on <code>TicketResolved</code>.</p>
+
+<footer>Task Pool Manager — Wireframes (static, non-interactive) · generated 2026-07-06</footer>
+</body>
+</html>

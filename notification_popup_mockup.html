@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Task Pool Manager — Notification Popup Mockup</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Baloo+2:wght@600;700&display=swap');
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: 'Baloo 2', 'Patrick Hand', sans-serif;
+    background: transparent;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .explainer {
+    position: absolute; top: 24px; left: 24px; max-width: 380px;
+    background: #ffffff; border: 2px solid #2b2f36; border-radius: 12px;
+    padding: 14px 18px; font-size: 15px; color: #2b2f36;
+    box-shadow: 4px 4px 0 rgba(43,47,54,0.12);
+  }
+  .explainer h1 { font-size: 18px; margin: 0 0 6px; }
+  .explainer p { margin: 4px 0; font-size: 14px; color: #5a5f66; font-family: 'Patrick Hand', cursive; }
+  .toggle-row { margin-top: 10px; display:flex; gap:8px; }
+  .toggle-btn {
+    font-family: 'Baloo 2', sans-serif; font-weight:600; font-size: 13px; cursor: pointer;
+    padding: 6px 12px; border: 2px solid #2b2f36; border-radius: 20px;
+    background: #fff; color:#2b2f36;
+  }
+  .toggle-btn.active { background:#2b2f36; color:#fff; }
+
+  .widget { position: fixed; right: 18px; bottom: 16px; z-index: 1000; }
+  .hover-zone { display:flex; flex-direction: column; align-items: flex-end; gap:10px; }
+
+  .avatar-wrap { position: relative; width: 70px; height: 76px; display:flex; align-items:flex-end; justify-content:center; }
+
+  .avatar-frame {
+    width: 100%; height: 100%; border-radius: 15px; overflow: hidden;
+    animation: avatarFloat 2.6s ease-in-out infinite;
+    transform-origin: 50% 100%;
+    position: relative; z-index: 1;
+    -webkit-app-region: drag;
+    cursor: grab;
+  }
+  .avatar-photo {
+    width: 100%; height: 100%; object-fit: cover; object-position: 50% 12%;
+    transform: scale(1.45);
+    display: block;
+  }
+  @keyframes avatarFloat {
+    0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
+    25%      { transform: translateY(-5px) scale(1.025) rotate(-2deg); }
+    50%      { transform: translateY(-8px) scale(1.04) rotate(0deg); }
+    75%      { transform: translateY(-5px) scale(1.025) rotate(2deg); }
+  }
+  .quick-actions {
+    display:flex; gap:8px;
+    opacity:0; transform: translateY(8px); pointer-events:none;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .hover-zone.js-hover .quick-actions, .hover-zone.panel-open .quick-actions, .hover-zone.pinned-open .quick-actions {
+    opacity:1; transform: translateY(0); pointer-events:auto;
+  }
+  .qa-btn {
+    width:40px; height:40px; border-radius:50%; border:2px solid #1a1a2e; background:#fff;
+    font-size:18px; display:flex; align-items:center; justify-content:center; cursor:pointer;
+    transition: transform .12s ease, background .12s ease;
+  }
+  .qa-btn:hover { transform: translateY(-2px) scale(1.06); }
+  .qa-btn.active { background:#1a1a2e; }
+
+  .panel {
+    display:none; width:250px; background:#fff; border:2px solid #1a1a2e; border-radius:14px;
+    padding:14px 16px; font-family:'Baloo 2', sans-serif;
+
+    max-height: 480px;
+    overflow-y: auto;
+  }
+  .panel.visible { display:block; }
+  .panel-head {
+    display:flex; align-items:center; justify-content:space-between; font-weight:700; font-size:15px; color:#1a1a2e;
+    position: sticky; top: -14px; z-index: 2; background: #fff;
+    margin: -14px -16px 10px; padding: 14px 16px 10px;
+  }
+  .panel-head-actions { display:flex; gap:6px; align-items:center; }
+  .panel-close, .panel-minimize { border:none; background:none; font-size:15px; cursor:pointer; color:#5a5f66; }
+  .panel-minimize:hover, .panel-close:hover { color:#1a1a2e; }
+  .field-label { font-size:12px; color:#5a5f66; margin:10px 0 4px; display:block; font-weight:600; }
+  .field-input { width:100%; padding:7px 9px; border:2px solid #d8dbe0; border-radius:8px; font-family:'Baloo 2', sans-serif; font-size:13px; color:#1a1a2e; }
+  textarea.field-input { resize:vertical; }
+  .lead-row { display:flex; align-items:center; gap:8px; }
+  .lead-field { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; }
+  .lead-field input { text-align:center; }
+  .lead-field span { font-size:11px; color:#5a5f66; font-weight:600; }
+  #jiraIntegrationSection.hidden { display:none; }
+  .segmented { display:flex; border:2px solid #1a1a2e; border-radius:10px; overflow:hidden; margin-top:2px; }
+  .segmented button { flex:1; padding:6px 0; border:none; background:#fff; font-family:'Baloo 2', sans-serif; font-weight:700; cursor:pointer; color:#1a1a2e; }
+  .segmented button:not(:last-child) { border-right:2px solid #1a1a2e; }
+  .segmented button.active { background:#1a1a2e; color:#fff; }
+  .save-btn {
+    width:100%; margin-top:12px; padding:9px 0; background:#3fd6c4; border:2px solid #1a1a2e; border-radius:10px;
+    font-family:'Baloo 2', sans-serif; font-weight:700; cursor:pointer; color:#1a1a2e; box-shadow: 2px 3px 0 rgba(26,26,46,0.15);
+    transition: background .15s ease;
+  }
+  .save-btn.dirty { background:#ff6b6b; }
+  .save-btn:active { transform: translateY(1px); box-shadow:none; }
+  .toast { margin-top:8px; text-align:center; font-size:12px; font-weight:700; color:#1a8f6b; opacity:0; transition: opacity .25s ease; }
+  .toast.show { opacity:1; }
+  .ticket-row { display:flex; flex-direction:column; gap:6px; padding:8px 0; border-bottom:1px solid #eceef0; }
+  .ticket-row:last-child { border-bottom:none; }
+  .ticket-row.overdue { background:#fff7f6; margin:0 -8px; padding:8px; border-radius:8px; }
+  .t-row-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .t-info { display:flex; flex-direction:column; }
+  .t-info strong { font-size:13px; color:#1a1a2e; }
+  .t-info span { font-size:11px; color:#5a5f66; font-family:'Patrick Hand', cursive; }
+  .t-note { font-style:italic; }
+  .badge { font-size:11px; font-weight:700; padding:3px 9px; border-radius:10px; white-space:nowrap; }
+  .badge-normal { background:#eceef0; color:#33383f; }
+  .badge-warning { background:#fff3c4; color:#8a6300; }
+  .badge-overdue { background:#ffe1de; color:#c1372b; }
+  .badge-done { background:#dff5e1; color:#1e7a3a; }
+  .t-actions { display:flex; gap:6px; }
+  .t-btn { flex:1; font-size:11px; font-weight:700; padding:4px 0; border-radius:8px; border:2px solid #1a1a2e; background:#fff; color:#1a1a2e; cursor:pointer; font-family:'Baloo 2', sans-serif; }
+  .t-btn:hover { background:#1a1a2e; color:#fff; }
+  .t-btn-danger { border-color:#c1372b; color:#c1372b; }
+  .t-btn-danger:hover { background:#c1372b; color:#fff; }
+  .hidden { display:none !important; }
+  .hint { font-size:11px; color:#5a5f66; margin-top:8px; font-family:'Patrick Hand', cursive; }
+  .divider { border:none; border-top:1px solid #eceef0; margin:14px 0; }
+  .field-row { display:flex; gap:6px; align-items:center; }
+  .field-row .hint { flex:1; margin-top:0; }
+  #editJiraConfigBtn, #doneJiraConfigBtn { width:auto; margin-top:0; padding:4px 12px; flex-shrink:0; }
+  .icon-btn-sm {
+    width:34px; height:34px; border-radius:8px; border:2px solid #1a1a2e; background:#fff;
+    font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+
+  .bubble {
+    position: absolute; right: 0; bottom: 100%; margin-bottom: 12px;
+    width: 210px; background: #ffffff; border: 2.5px solid #2b2f36; border-radius: 16px;
+    padding: 10px 14px; box-shadow: 3px 4px 0 rgba(43,47,54,0.15);
+    display: flex; align-items: flex-start; gap: 8px;
+    opacity: 0; transform: scale(0.35) translateY(14px); transform-origin: 85% 100%;
+    pointer-events: none;
+  }
+  .bubble.visible { animation: bubbleIn 0.4s cubic-bezier(.34,1.4,.64,1) forwards; }
+  @keyframes bubbleIn {
+    0%   { opacity: 0; transform: scale(0.35) translateY(14px); }
+    60%  { opacity: 1; transform: scale(1.08) translateY(-2px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .bubble::after, .bubble::before {
+    content: ''; position: absolute; right: 24px; width: 0; height: 0; border: 8px solid transparent; border-bottom: 0;
+  }
+  .bubble::after  { bottom: -8px;   border-top-color: #2b2f36; }
+  .bubble::before { bottom: -5.5px; border-top-color: #ffffff; border-width: 6.5px; right: 25.5px; }
+  .bubble-bell { font-size: 18px; animation: bellWiggle 0.55s ease-in-out infinite; }
+  @keyframes bellWiggle { 0%,100%{transform:rotate(-10deg);} 50%{transform:rotate(10deg);} }
+  .bubble-text { display: flex; flex-direction: column; }
+  .bubble-text strong { font-size: 14px; color: #2b2f36; font-family: 'Baloo 2', sans-serif; }
+  .bubble-text span { font-size: 12px; color: #5a5f66; font-family: 'Patrick Hand', cursive; }
+</style>
+</head>
+<body>
+
+<div class="widget">
+  <div class="hover-zone" id="hoverZone">
+
+    <div class="panel" id="panel-settings">
+      <div class="panel-head"><span>⚙️ Settings</span><span class="panel-head-actions"><button class="panel-minimize" data-minimize title="Hide (keep unsaved changes)">−</button><button class="panel-close" data-close title="Close (discard unsaved changes)">✕</button></span></div>
+
+      <label class="field-label">Pool</label>
+      <select class="field-input" id="poolSelect">
+        <option>Sprint 24 (7/10)</option>
+        <option>Bugfix Queue (3/5)</option>
+        <option>On-call (10/10)</option>
+      </select>
+
+      <label class="field-label">Pool capacity</label>
+      <input class="field-input" type="number" value="10" min="1" id="capacityInput"/>
+
+      <label class="field-label">Warning lead time (before deadline)</label>
+      <div class="lead-row">
+        <div class="lead-field"><input class="field-input" type="number" min="0" value="0" id="leadDaysInput"/><span>days</span></div>
+        <div class="lead-field"><input class="field-input" type="number" min="0" value="1" id="leadHoursInput"/><span>hrs</span></div>
+        <div class="lead-field"><input class="field-input" type="number" min="0" value="0" id="leadMinutesInput"/><span>min</span></div>
+      </div>
+
+      <label class="field-label">Working time (used to time deadlines &amp; warnings)</label>
+      <div class="segmented" id="timeFormatSegmented">
+        <button data-format="24h" class="active">24h</button>
+        <button data-format="12h">12h</button>
+      </div>
+      <div class="lead-row">
+        <div class="lead-field"><input class="field-input" type="text" id="workingStartInput" placeholder="08:00"/><span>start</span></div>
+        <div class="lead-field"><input class="field-input" type="text" id="workingEndInput" placeholder="17:00"/><span>end</span></div>
+      </div>
+      <p class="hint" id="workingTimeHint">Deadlines from Jira only carry a date — the warning end time anchors the exact hour.</p>
+
+      <label class="field-label">Notification text size</label>
+      <div class="segmented" id="sizeSegmented">
+        <button data-size="s">S</button>
+        <button data-size="m" class="active">M</button>
+        <button data-size="l">L</button>
+      </div>
+
+      <label class="field-label">App Mode</label>
+      <div class="segmented" id="appModeSegmented">
+        <button data-mode="demo" class="active">Demo</button>
+        <button data-mode="production">Production</button>
+      </div>
+      <p class="hint">Production mode requires a connected Jira account below.</p>
+
+      <button class="save-btn" data-save>Save changes</button>
+      <div class="toast" id="settingsToast">Saved ✓</div>
+
+      <div id="jiraIntegrationSection">
+        <hr class="divider">
+
+        <label class="field-label">Jira Integration</label>
+        <div class="field-row">
+          <p class="hint" id="jiraStatusText">Not connected</p>
+          <button class="save-btn" id="editJiraConfigBtn" style="display:none">Edit</button>
+          <button class="save-btn" id="doneJiraConfigBtn" style="display:none">Done</button>
+        </div>
+
+        <div id="jiraCredentialsFields">
+          <label class="field-label">Poll interval (seconds, min 15)</label>
+          <input class="field-input" type="number" min="15" id="jiraPollIntervalInput" placeholder="300"/>
+
+          <label class="field-label">Client ID</label>
+          <input class="field-input" type="text" id="jiraClientIdInput" placeholder="Your Atlassian OAuth Client ID">
+
+          <label class="field-label">Client Secret</label>
+          <input class="field-input" type="password" id="jiraClientSecretInput" placeholder="Your Atlassian OAuth Client Secret">
+
+          <button class="save-btn" id="saveJiraConfigBtn">Save Jira credentials</button>
+          <div class="toast" id="jiraConfigToast">Saved ✓</div>
+
+          <label class="field-label">Redirect URI (paste into your Atlassian app)</label>
+          <div class="field-row">
+            <input class="field-input" type="text" id="jiraRedirectUriInput" readonly>
+            <button class="icon-btn-sm" id="copyRedirectUriBtn" title="Copy">📋</button>
+          </div>
+
+          <button class="save-btn" id="connectJiraBtn" disabled>Connect Jira</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-tickets">
+      <div class="panel-head"><span id="ticketsPanelTitle">📋 Sprint 24 (7/10)</span><span class="panel-head-actions"><button class="panel-minimize" data-minimize title="Hide">−</button><button class="panel-close" data-close title="Close">✕</button></span></div>
+
+      <div class="segmented" id="ticketsTabSegmented">
+        <button data-tab="active" class="active">Active</button>
+        <button data-tab="done">Done</button>
+      </div>
+
+      <div id="ticketsActivePage">
+        <div id="ticketRows"></div>
+      </div>
+
+      <div id="ticketsDonePage" class="hidden">
+        <input class="field-input" type="text" id="doneSearchInput" placeholder="Search by ticket prefix (e.g. ENG-)"/>
+        <div id="doneTicketRows"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-add">
+      <div class="panel-head"><span>➕ Add ticket</span><span class="panel-head-actions"><button class="panel-minimize" data-minimize title="Hide (keep draft)">−</button><button class="panel-close" data-close title="Close (discard draft)">✕</button></span></div>
+      <label class="field-label">Paste Jira link</label>
+      <input class="field-input" type="text" placeholder="https://yourorg.atlassian.net/browse/ENG-500" id="jiraUrlInput"/>
+
+      <label class="field-label">Note (optional)</label>
+      <textarea class="field-input" id="addNoteInput" rows="2" placeholder="Anything worth remembering about this ticket"></textarea>
+
+      <button class="save-btn" data-save>Add to pool</button>
+      <div class="toast" id="addToast">Added ✓</div>
+      <p class="hint" id="addHint">Pool is 7/10 — this will succeed. If the pool were full, you'd need to remove a ticket first.</p>
+
+      <div id="dueDateSection" class="hidden">
+        <label class="field-label">This issue has no due date — enter one</label>
+        <input class="field-input" type="date" id="manualDueDateInput"/>
+        <button class="save-btn" id="confirmDueDateBtn">Confirm deadline &amp; add</button>
+      </div>
+    </div>
+
+    <div class="quick-actions" id="quickActions">
+      <button class="qa-btn" data-panel="settings" title="Settings">⚙️</button>
+      <button class="qa-btn" data-panel="tickets" title="Ticket list">📋</button>
+      <button class="qa-btn" data-panel="add" title="Add ticket">➕</button>
+      <button class="qa-btn" id="hideAvatarBtn" title="Hide (runs as tray icon only)">🙈</button>
+    </div>
+
+    <div class="avatar-wrap">
+      <div class="bubble" id="bubble">
+        <span class="bubble-bell">🔔</span>
+        <div class="bubble-text">
+          <strong id="bubbleTitle">Ticket overdue!</strong>
+          <span id="bubbleSubtitle">ENG-455 needs your attention</span>
+        </div>
+      </div>
+      <div class="avatar-frame">
+        <img class="avatar-photo" id="avatarImg" src="assets/avatar.jpg" alt="Assistant avatar">
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="http://localhost:4000/socket.io/socket.io.js"></script>
+<script>
+  const API_BASE = 'http://localhost:4000';
+  const SOCKET_URL = 'http://localhost:4000';
+
+  let lastIgnoreMouseEvents = null;
+  document.addEventListener('mousemove', (e) => {
+    if (!window.electronAPI) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const overWidget = !!(el && el.closest('.widget'));
+    const shouldIgnore = !overWidget;
+    if (shouldIgnore !== lastIgnoreMouseEvents) {
+      lastIgnoreMouseEvents = shouldIgnore;
+      window.electronAPI.setIgnoreMouseEvents(shouldIgnore, { forward: true });
+      document.getElementById('hoverZone').classList.toggle('js-hover', !shouldIgnore);
+    }
+  });
+
+  const hoverZone = document.getElementById('hoverZone');
+  const qaButtons = document.querySelectorAll('.qa-btn[data-panel]');
+
+  document.querySelector('.avatar-frame').addEventListener('click', () => {
+    hoverZone.classList.add('pinned-open');
+  });
+  document.querySelector('.avatar-frame').addEventListener('dblclick', () => {
+    hoverZone.classList.remove('pinned-open');
+  });
+  const panels = {
+    settings: document.getElementById('panel-settings'),
+    tickets: document.getElementById('panel-tickets'),
+    add: document.getElementById('panel-add'),
+  };
+  let openPanel = null;
+  const preserveDraft = {};
+
+  function openOnly(key) {
+    Object.entries(panels).forEach(([k, el]) => el.classList.toggle('visible', k === key));
+    qaButtons.forEach(b => b.classList.toggle('active', b.dataset.panel === key));
+    openPanel = key;
+    hoverZone.classList.add('panel-open');
+    if (preserveDraft[key]) {
+      preserveDraft[key] = false;
+      return;
+    }
+    if (key === 'settings') loadSettingsPanel();
+    if (key === 'tickets') loadTicketsPanel();
+    if (key === 'add') refreshAddHint();
+  }
+  function hidePanels() {
+    Object.values(panels).forEach(el => el.classList.remove('visible'));
+    qaButtons.forEach(b => b.classList.remove('active'));
+    hoverZone.classList.remove('panel-open');
+  }
+  function closeAndKeepDraft() {
+    if (openPanel) preserveDraft[openPanel] = true;
+    hidePanels();
+    openPanel = null;
+  }
+  function closeAndDiscard() {
+    if (openPanel === 'add') {
+      document.getElementById('jiraUrlInput').value = '';
+      document.getElementById('addNoteInput').value = '';
+      document.getElementById('manualDueDateInput').value = '';
+      document.getElementById('dueDateSection').classList.add('hidden');
+    }
+    if (openPanel === 'tickets') {
+      document.querySelectorAll('#ticketsTabSegmented button').forEach(b => b.classList.toggle('active', b.dataset.tab === 'active'));
+      document.getElementById('ticketsActivePage').classList.remove('hidden');
+      document.getElementById('ticketsDonePage').classList.add('hidden');
+      document.getElementById('doneSearchInput').value = '';
+    }
+    if (openPanel) preserveDraft[openPanel] = false;
+    hidePanels();
+    openPanel = null;
+  }
+
+  qaButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.panel;
+      openPanel === key ? closeAndKeepDraft() : openOnly(key);
+    });
+  });
+  document.querySelectorAll('[data-minimize]').forEach(btn => btn.addEventListener('click', closeAndKeepDraft));
+  document.querySelectorAll('[data-close]').forEach(btn => btn.addEventListener('click', closeAndDiscard));
+
+  document.getElementById('hideAvatarBtn').addEventListener('click', () => {
+    if (window.electronAPI) window.electronAPI.hideWindow();
+  });
+
+  const leadDaysInput = document.getElementById('leadDaysInput');
+  const leadHoursInput = document.getElementById('leadHoursInput');
+  const leadMinutesInput = document.getElementById('leadMinutesInput');
+
+  function setLeadInputsFromMinutes(totalMinutes) {
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+    leadDaysInput.value = days;
+    leadHoursInput.value = hours;
+    leadMinutesInput.value = minutes;
+  }
+
+  function getLeadMinutesFromInputs() {
+    const days = Number(leadDaysInput.value) || 0;
+    const hours = Number(leadHoursInput.value) || 0;
+    const minutes = Number(leadMinutesInput.value) || 0;
+    return days * 1440 + hours * 60 + minutes;
+  }
+
+  const workingStartInput = document.getElementById('workingStartInput');
+  const workingEndInput = document.getElementById('workingEndInput');
+  let currentWorkingHourStart = 480;
+  let currentWorkingHourEnd = 1020;
+
+  function currentTimeFormat() {
+    const activeBtn = document.querySelector('#timeFormatSegmented button.active');
+    return activeBtn ? activeBtn.dataset.format : '24h';
+  }
+
+  function formatMinutesToTimeString(totalMinutes, format) {
+    const h24 = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    const mm = String(m).padStart(2, '0');
+    if (format === '12h') {
+      const period = h24 >= 12 ? 'PM' : 'AM';
+      let h12 = h24 % 12;
+      if (h12 === 0) h12 = 12;
+      return h12 + ':' + mm + ' ' + period;
+    }
+    return String(h24).padStart(2, '0') + ':' + mm;
+  }
+
+  function parseTimeStringToMinutes(str, format) {
+    const trimmed = (str || '').trim();
+    if (format === '12h') {
+      const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
+      if (!match) return null;
+      let h = Number(match[1]) % 12;
+      const m = Number(match[2]);
+      if (/pm/i.test(match[3])) h += 12;
+      return h * 60 + m;
+    }
+    const match = trimmed.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return null;
+    const h = Number(match[1]);
+    const m = Number(match[2]);
+    if (h > 23 || m > 59) return null;
+    return h * 60 + m;
+  }
+
+  function renderWorkingTimeInputs() {
+    const format = currentTimeFormat();
+    workingStartInput.value = formatMinutesToTimeString(currentWorkingHourStart, format);
+    workingEndInput.value = formatMinutesToTimeString(currentWorkingHourEnd, format);
+    workingStartInput.placeholder = format === '12h' ? '8:00 AM' : '08:00';
+    workingEndInput.placeholder = format === '12h' ? '5:00 PM' : '17:00';
+  }
+
+  document.querySelectorAll('#timeFormatSegmented button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#timeFormatSegmented button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderWorkingTimeInputs();
+    });
+  });
+
+  document.querySelectorAll('#sizeSegmented button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#sizeSegmented button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      localStorage.setItem('notificationTextSize', btn.dataset.size);
+      checkSettingsDirty();
+    });
+  });
+  (function restoreTextSize() {
+    const saved = localStorage.getItem('notificationTextSize');
+    if (!saved) return;
+    document.querySelectorAll('#sizeSegmented button').forEach(b => b.classList.toggle('active', b.dataset.size === saved));
+  })();
+
+  function updateJiraSectionVisibility() {
+    const activeModeBtn = document.querySelector('#appModeSegmented button.active');
+    const appMode = activeModeBtn ? activeModeBtn.dataset.mode : 'demo';
+    document.getElementById('jiraIntegrationSection').classList.toggle('hidden', appMode !== 'production');
+  }
+
+  document.querySelectorAll('#appModeSegmented button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#appModeSegmented button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      updateJiraSectionVisibility();
+    });
+  });
+
+  let settingsBaseline = null;
+
+  function currentSettingsSnapshot() {
+    const activeModeBtn = document.querySelector('#appModeSegmented button.active');
+    const activeSizeBtn = document.querySelector('#sizeSegmented button.active');
+    const format = currentTimeFormat();
+    return {
+      capacity: Number(document.getElementById('capacityInput').value),
+      leadMinutes: getLeadMinutesFromInputs(),
+      appMode: activeModeBtn ? activeModeBtn.dataset.mode : 'demo',
+      timeFormat: format,
+      workingHourStart: parseTimeStringToMinutes(workingStartInput.value, format),
+      workingHourEnd: parseTimeStringToMinutes(workingEndInput.value, format),
+      textSize: activeSizeBtn ? activeSizeBtn.dataset.size : 'm',
+      jiraPollIntervalSeconds: Number(document.getElementById('jiraPollIntervalInput').value),
+    };
+  }
+
+  function markSettingsClean() {
+    settingsBaseline = currentSettingsSnapshot();
+    document.querySelector('#panel-settings [data-save]').classList.remove('dirty');
+  }
+
+  function checkSettingsDirty() {
+    if (!settingsBaseline) return;
+    const current = currentSettingsSnapshot();
+    const isDirty = Object.keys(settingsBaseline).some((key) => settingsBaseline[key] !== current[key]);
+    document.querySelector('#panel-settings [data-save]').classList.toggle('dirty', isDirty);
+  }
+
+  ['capacityInput', 'leadDaysInput', 'leadHoursInput', 'leadMinutesInput', 'workingStartInput', 'workingEndInput', 'jiraPollIntervalInput'].forEach(id => {
+    document.getElementById(id).addEventListener('input', checkSettingsDirty);
+  });
+  document.querySelectorAll('#appModeSegmented button, #timeFormatSegmented button').forEach(btn => {
+    btn.addEventListener('click', checkSettingsDirty);
+  });
+
+  function showToast(el, text, isError) {
+    el.textContent = text;
+    el.style.color = isError ? '#c1372b' : '';
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 1600);
+  }
+
+  let activePoolId = localStorage.getItem('activePoolId') || null;
+  let pools = [];
+  let socket = null;
+
+  async function api(path, options) {
+    options = options || {};
+    const headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
+    return fetch(API_BASE + path, Object.assign({}, options, { headers }));
+  }
+
+  async function refreshPools() {
+    const res = await api('/pools');
+    pools = await res.json();
+  }
+
+  async function ensureActivePool() {
+    await refreshPools();
+    if (activePoolId && pools.some(p => p.id === activePoolId)) return;
+    if (pools.length > 0) {
+      activePoolId = pools[0].id;
+    } else {
+      const createRes = await api('/pools', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Ticket Pool', capacity: 5, defaultWarningLeadMinutes: 60 }),
+      });
+      const created = await createRes.json();
+      activePoolId = created.id;
+      await refreshPools();
+    }
+    localStorage.setItem('activePoolId', activePoolId);
+  }
+
+  function connectSocket() {
+    socket = io(SOCKET_URL);
+    socket.on('connect', () => { if (activePoolId) socket.emit('joinPool', activePoolId); });
+    ['TicketAdded', 'TicketWarning', 'TicketOverdue', 'TicketResolved', 'TicketDone', 'PoolCapacityChanged', 'IntegrationConnected'].forEach(evt => {
+      socket.on(evt, payload => handleSocketEvent(evt, payload));
+    });
+  }
+
+  async function bootstrap() {
+    await ensureActivePool();
+    connectSocket();
+  }
+  bootstrap();
+
+  async function loadSettingsPanel() {
+    await refreshPools();
+    const poolSelect = document.getElementById('poolSelect');
+    poolSelect.innerHTML = pools.map(p => `<option value="${p.id}">${p.name} (${p.ticketCount}/${p.capacity})</option>`).join('');
+    poolSelect.value = activePoolId;
+
+    const pool = pools.find(p => p.id === activePoolId);
+    document.getElementById('capacityInput').value = pool ? pool.capacity : '';
+
+    const settingsRes = await api('/users/me/settings');
+    const settings = await settingsRes.json();
+    setLeadInputsFromMinutes(settings.defaultWarningLeadMinutes);
+    document.querySelectorAll('#appModeSegmented button').forEach(b => b.classList.toggle('active', b.dataset.mode === settings.appMode));
+    updateJiraSectionVisibility();
+
+    currentWorkingHourStart = settings.workingHourStart;
+    currentWorkingHourEnd = settings.workingHourEnd;
+    document.querySelectorAll('#timeFormatSegmented button').forEach(b => b.classList.toggle('active', b.dataset.format === settings.timeFormat));
+    renderWorkingTimeInputs();
+
+    document.getElementById('jiraPollIntervalInput').value = settings.jiraPollIntervalSeconds;
+
+    jiraEditMode = null;
+
+    await loadJiraPanel();
+    markSettingsClean();
+  }
+
+  document.getElementById('poolSelect').addEventListener('change', async (e) => {
+    activePoolId = e.target.value;
+    localStorage.setItem('activePoolId', activePoolId);
+    if (socket) socket.emit('joinPool', activePoolId);
+    await loadSettingsPanel();
+  });
+
+  document.querySelector('#panel-settings [data-save]').addEventListener('click', async () => {
+    const toast = document.getElementById('settingsToast');
+    const capacity = Number(document.getElementById('capacityInput').value);
+    const leadMinutes = getLeadMinutesFromInputs();
+    const activeModeBtn = document.querySelector('#appModeSegmented button.active');
+    const appMode = activeModeBtn ? activeModeBtn.dataset.mode : 'demo';
+    const timeFormat = currentTimeFormat();
+    const workingHourStart = parseTimeStringToMinutes(workingStartInput.value, timeFormat);
+    const workingHourEnd = parseTimeStringToMinutes(workingEndInput.value, timeFormat);
+    if (workingHourStart === null || workingHourEnd === null) {
+      showToast(toast, timeFormat === '12h' ? 'Use h:mm AM/PM' : 'Use HH:mm', true);
+      return;
+    }
+    const jiraPollIntervalSeconds = Number(document.getElementById('jiraPollIntervalInput').value);
+    const [poolRes, settingsRes] = await Promise.all([
+      api('/pools/' + activePoolId, { method: 'PATCH', body: JSON.stringify({ capacity }) }),
+      api('/users/me/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({ defaultWarningLeadMinutes: leadMinutes, appMode, workingHourStart, workingHourEnd, timeFormat, jiraPollIntervalSeconds }),
+      }),
+    ]);
+    if (!poolRes.ok || !settingsRes.ok) {
+      const failed = !settingsRes.ok ? await settingsRes.json() : await poolRes.json();
+      showToast(toast, failed.error || 'Save failed', true);
+      return;
+    }
+    const settings = await settingsRes.json();
+    currentWorkingHourStart = settings.workingHourStart;
+    currentWorkingHourEnd = settings.workingHourEnd;
+    await refreshPools();
+    showToast(toast, 'Saved ✓', false);
+    markSettingsClean();
+  });
+
+  let jiraEditMode = null;
+
+  async function loadJiraPanel() {
+    const [configRes, statusRes] = await Promise.all([
+      api('/integrations/jira/config'),
+      api('/integrations/jira/status'),
+    ]);
+    const config = await configRes.json();
+    const status = await statusRes.json();
+
+    document.getElementById('jiraClientIdInput').value = config.clientId || '';
+    document.getElementById('jiraRedirectUriInput').value = config.redirectUri;
+    document.getElementById('connectJiraBtn').disabled = !config.configured;
+
+    const statusText = document.getElementById('jiraStatusText');
+    if (status.pollOffline) {
+      statusText.textContent = '⚠ No internet — Jira poll failed';
+      statusText.style.color = '#c1372b';
+    } else {
+      statusText.textContent = status.connected
+        ? 'Connected ✓' + (status.siteName ? ' (' + status.siteName + ')' : '')
+        : 'Not connected';
+      statusText.style.color = '';
+    }
+
+    if (jiraEditMode === null) jiraEditMode = !status.connected;
+
+    document.getElementById('jiraCredentialsFields').classList.toggle('hidden', !jiraEditMode);
+    document.getElementById('editJiraConfigBtn').style.display = !jiraEditMode ? '' : 'none';
+    document.getElementById('doneJiraConfigBtn').style.display = jiraEditMode ? '' : 'none';
+  }
+
+  document.getElementById('doneJiraConfigBtn').addEventListener('click', () => {
+    jiraEditMode = false;
+    loadJiraPanel();
+  });
+
+  document.getElementById('editJiraConfigBtn').addEventListener('click', () => {
+    jiraEditMode = true;
+    loadJiraPanel();
+  });
+
+  document.getElementById('saveJiraConfigBtn').addEventListener('click', async () => {
+    const toast = document.getElementById('jiraConfigToast');
+    const clientId = document.getElementById('jiraClientIdInput').value;
+    const clientSecret = document.getElementById('jiraClientSecretInput').value;
+    const res = await api('/integrations/jira/config', {
+      method: 'PUT',
+      body: JSON.stringify({ clientId, clientSecret }),
+    });
+    if (!res.ok) {
+      showToast(toast, 'Save failed', true);
+      return;
+    }
+    document.getElementById('jiraClientSecretInput').value = '';
+    await loadJiraPanel();
+    showToast(toast, 'Saved ✓', false);
+  });
+
+  document.getElementById('copyRedirectUriBtn').addEventListener('click', () => {
+    const input = document.getElementById('jiraRedirectUriInput');
+    input.select();
+    navigator.clipboard?.writeText(input.value).catch(() => {});
+  });
+
+  document.getElementById('connectJiraBtn').addEventListener('click', async () => {
+    const res = await api('/integrations/jira/connect', { method: 'POST' });
+    if (!res.ok) return;
+    const { authorizeUrl } = await res.json();
+    window.open(authorizeUrl, '_blank');
+  });
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function ticketRowHtml(ticket) {
+    const badgeClass = ticket.status === 'Warning' ? 'badge-warning' : ticket.status === 'Overdue' ? 'badge-overdue' : ticket.status === 'Done' ? 'badge-done' : 'badge-normal';
+    const rowClass = ticket.status === 'Overdue' ? 'ticket-row overdue' : 'ticket-row';
+    const doneBtn = ticket.status === 'Done' ? '' : '<button class="t-btn" data-action="done" data-id="' + ticket.id + '">Done</button>';
+    const noteHtml = ticket.note ? '<span class="t-note">📝 ' + escapeHtml(ticket.note) + '</span>' : '';
+    return '<div class="' + rowClass + '"><div class="t-row-top"><div class="t-info"><strong>' + ticket.jiraKey + '</strong><span>' + ticket.title +
+      '</span>' + noteHtml + '</div><span class="badge ' + badgeClass + '">' + ticket.status + '</span></div>' +
+      '<div class="t-actions">' + doneBtn + '<button class="t-btn t-btn-danger" data-action="remove" data-id="' + ticket.id + '">Remove</button></div></div>';
+  }
+
+  function doneTicketRowHtml(ticket) {
+    const doneDate = ticket.doneAt ? new Date(ticket.doneAt).toLocaleDateString() : '';
+    return '<div class="ticket-row"><div class="t-row-top"><div class="t-info"><strong>' + ticket.jiraKey + '</strong><span>' + ticket.title +
+      '</span></div><span class="badge badge-done">Done ' + doneDate + '</span></div></div>';
+  }
+
+  async function loadTicketsPanel() {
+    await refreshPools();
+    const pool = pools.find(p => p.id === activePoolId);
+    const res = await api('/pools/' + activePoolId + '/tickets');
+    const tickets = await res.json();
+    document.getElementById('ticketsPanelTitle').textContent =
+      '📋 ' + (pool ? pool.name : '') + ' (' + tickets.length + '/' + (pool ? pool.capacity : '?') + ')';
+    document.getElementById('ticketRows').innerHTML =
+      tickets.map(ticketRowHtml).join('') || '<p class="hint">No tickets yet.</p>';
+  }
+
+  async function loadDoneTicketsPage() {
+    const search = document.getElementById('doneSearchInput').value.trim();
+    const query = search ? '?search=' + encodeURIComponent(search) : '';
+    const res = await api('/pools/' + activePoolId + '/tickets/done' + query);
+    const tickets = await res.json();
+    document.getElementById('doneTicketRows').innerHTML =
+      tickets.map(doneTicketRowHtml).join('') || '<p class="hint">No done tickets yet.</p>';
+  }
+
+  document.querySelectorAll('#ticketsTabSegmented button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#ticketsTabSegmented button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const isDone = btn.dataset.tab === 'done';
+      document.getElementById('ticketsActivePage').classList.toggle('hidden', isDone);
+      document.getElementById('ticketsDonePage').classList.toggle('hidden', !isDone);
+      if (isDone) loadDoneTicketsPage();
+    });
+  });
+
+  document.getElementById('doneSearchInput').addEventListener('input', () => loadDoneTicketsPage());
+
+  document.getElementById('ticketRows').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const ticketId = btn.dataset.id;
+    if (btn.dataset.action === 'done') {
+      await api('/pools/' + activePoolId + '/tickets/' + ticketId + '/done', { method: 'POST' });
+    } else if (btn.dataset.action === 'remove') {
+      await api('/pools/' + activePoolId + '/tickets/' + ticketId, { method: 'DELETE' });
+    }
+    await loadTicketsPanel();
+  });
+
+  async function refreshAddHint() {
+    await refreshPools();
+    const pool = pools.find(p => p.id === activePoolId);
+    const hint = document.getElementById('addHint');
+    if (!pool) return;
+    hint.style.color = '';
+    hint.textContent = 'Pool is ' + pool.ticketCount + '/' + pool.capacity +
+      " — this will succeed. If the pool were full, you'd need to remove a ticket first.";
+  }
+
+  async function submitAddTicket(dueDate) {
+    const input = document.getElementById('jiraUrlInput');
+    const noteInput = document.getElementById('addNoteInput');
+    const toast = document.getElementById('addToast');
+    const hint = document.getElementById('addHint');
+    const dueDateSection = document.getElementById('dueDateSection');
+    const body = { jiraUrl: input.value };
+    if (noteInput.value.trim()) body.note = noteInput.value.trim();
+    if (dueDate) body.dueDate = dueDate;
+
+    const res = await api('/pools/' + activePoolId + '/tickets', { method: 'POST', body: JSON.stringify(body) });
+    if (!res.ok) {
+      const failed = await res.json().catch(() => ({}));
+      hint.style.color = '#c1372b';
+      if (failed.error === 'PoolCapacityExceeded') {
+        hint.textContent = 'Pool is ' + failed.current + '/' + failed.capacity + ' — remove a ticket first.';
+        dueDateSection.classList.add('hidden');
+      } else if (failed.error === 'DueDateRequired') {
+        hint.textContent = failed.message || 'This Jira issue has no due date.';
+        dueDateSection.classList.remove('hidden');
+      } else if (['JiraNotConnected', 'JiraReauthRequired', 'JiraNotConfigured'].includes(failed.error)) {
+        hint.textContent = failed.message || 'Jira is not connected — check Settings.';
+        dueDateSection.classList.add('hidden');
+      } else {
+        showToast(toast, 'Add failed', true);
+      }
+      return;
+    }
+    input.value = '';
+    noteInput.value = '';
+    document.getElementById('manualDueDateInput').value = '';
+    dueDateSection.classList.add('hidden');
+    showToast(toast, 'Added ✓', false);
+  }
+
+  document.querySelector('#panel-add [data-save]').addEventListener('click', () => submitAddTicket());
+
+  document.getElementById('confirmDueDateBtn').addEventListener('click', () => {
+    const dueDate = document.getElementById('manualDueDateInput').value;
+    if (!dueDate) return;
+    submitAddTicket(dueDate);
+  });
+
+  const activeAlerts = new Map();
+
+  function setBubbleVisible(visible) {
+    const bubble = document.getElementById('bubble');
+    if (visible) {
+      bubble.classList.remove('visible');
+      void bubble.offsetWidth;
+      bubble.classList.add('visible');
+    } else {
+      bubble.classList.remove('visible');
+    }
+  }
+
+  function renderBubble() {
+    if (activeAlerts.size === 0) {
+      setBubbleVisible(false);
+      return;
+    }
+    const entries = [...activeAlerts.values()];
+    const chosen = entries.find(e => e.type === 'Overdue') || entries[0];
+    document.getElementById('bubbleTitle').textContent = chosen.type === 'Overdue' ? 'Ticket overdue!' : 'Deadline approaching!';
+    document.getElementById('bubbleSubtitle').textContent = chosen.ticketKey + ' needs your attention';
+    setBubbleVisible(true);
+  }
+
+  async function handleSocketEvent(evt, payload) {
+    if (evt === 'TicketWarning' || evt === 'TicketOverdue') {
+      let ticketKey = payload.ticketId;
+      try {
+        const res = await api('/pools/' + activePoolId + '/tickets');
+        const tickets = await res.json();
+        const found = tickets.find(t => t.id === payload.ticketId);
+        if (found) ticketKey = found.jiraKey;
+      } catch (e) {}
+      activeAlerts.set(payload.ticketId, { type: evt === 'TicketOverdue' ? 'Overdue' : 'Warning', ticketKey });
+      renderBubble();
+    } else if (evt === 'TicketResolved' || evt === 'TicketDone') {
+      activeAlerts.delete(payload.ticketId);
+      renderBubble();
+    }
+    if (openPanel === 'tickets') {
+      loadTicketsPanel();
+      if (!document.getElementById('ticketsDonePage').classList.contains('hidden')) loadDoneTicketsPage();
+    }
+    if (openPanel === 'add') refreshAddHint();
+    if (openPanel === 'settings' && evt === 'PoolCapacityChanged') loadSettingsPanel();
+    if (openPanel === 'settings' && evt === 'IntegrationConnected') {
+      jiraEditMode = false;
+      loadJiraPanel();
+    }
+  }
+
+  setBubbleVisible(false);
+</script>
+
+</body>
+</html>
