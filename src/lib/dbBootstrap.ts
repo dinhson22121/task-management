@@ -57,6 +57,48 @@ async function ensureTicketNoteColumn(): Promise<void> {
   await prisma.$executeRawUnsafe(`ALTER TABLE "Ticket" ADD COLUMN "note" TEXT`);
 }
 
+async function ensureIntegrationConnectionAuthMethodColumns(): Promise<void> {
+  if (!(await columnExists('IntegrationConnection', 'authMethod'))) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "IntegrationConnection" ADD COLUMN "authMethod" TEXT NOT NULL DEFAULT 'oauth'`);
+  }
+  if (!(await columnExists('IntegrationConnection', 'email'))) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "IntegrationConnection" ADD COLUMN "email" TEXT`);
+  }
+}
+
+async function ensureTicketDeadlineNullableAndJiraStatus(): Promise<void> {
+  const columns = await prisma.$queryRawUnsafe<Array<{ name: string; notnull: number }>>(
+    `PRAGMA table_info("Ticket")`,
+  );
+  const deadlineColumn = columns.find((c) => c.name === 'deadline');
+  if (deadlineColumn && deadlineColumn.notnull === 0) return;
+
+  await prisma.$executeRawUnsafe(`PRAGMA foreign_keys=OFF`);
+  await prisma.$executeRawUnsafe(`CREATE TABLE "new_Ticket" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "poolId" TEXT NOT NULL,
+    "jiraKey" TEXT NOT NULL,
+    "jiraUrl" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "deadline" DATETIME,
+    "warningLeadMinutes" INTEGER,
+    "status" TEXT NOT NULL DEFAULT 'Normal',
+    "jiraStatus" TEXT,
+    "addedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "doneAt" DATETIME,
+    "note" TEXT,
+    CONSTRAINT "Ticket_poolId_fkey" FOREIGN KEY ("poolId") REFERENCES "Pool" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`);
+  await prisma.$executeRawUnsafe(`INSERT INTO "new_Ticket" ("id", "poolId", "jiraKey", "jiraUrl", "title", "description", "deadline", "warningLeadMinutes", "status", "addedAt", "doneAt", "note")
+    SELECT "id", "poolId", "jiraKey", "jiraUrl", "title", "description", "deadline", "warningLeadMinutes", "status", "addedAt", "doneAt", "note" FROM "Ticket"`);
+  await prisma.$executeRawUnsafe(`DROP TABLE "Ticket"`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "new_Ticket" RENAME TO "Ticket"`);
+  await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX "Ticket_poolId_jiraKey_key" ON "Ticket"("poolId", "jiraKey")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX "Ticket_deadline_idx" ON "Ticket"("deadline")`);
+  await prisma.$executeRawUnsafe(`PRAGMA foreign_keys=ON`);
+}
+
 export async function ensureSchema(): Promise<void> {
   const rows = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
     "SELECT name FROM sqlite_master WHERE type='table' AND name='User'",
@@ -88,4 +130,6 @@ export async function ensureSchema(): Promise<void> {
   await ensureTicketDoneAtColumn();
   await ensureUserJiraPollIntervalColumn();
   await ensureTicketNoteColumn();
+  await ensureTicketDeadlineNullableAndJiraStatus();
+  await ensureIntegrationConnectionAuthMethodColumns();
 }

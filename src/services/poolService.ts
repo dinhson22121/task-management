@@ -1,8 +1,8 @@
 import { Mutex } from 'async-mutex';
+import { appEvents } from '../lib/appEvents';
 import { NotFoundError, PoolCapacityExceededError, ValidationError } from '../lib/httpError';
 import { parseJiraKey } from '../lib/jiraUrlParser';
 import { prisma } from '../prismaClient';
-import { getIo } from '../sockets/ioInstance';
 import { resolveIssue } from './jiraClient';
 
 const poolLocks = new Map<string, Mutex>();
@@ -23,7 +23,7 @@ function assertValidLeadMinutes(value: number): void {
 }
 
 function emitPoolCapacityChanged(poolId: string, current: number, capacity: number) {
-  getIo()?.to(poolId).emit('PoolCapacityChanged', { poolId, current, capacity });
+  appEvents.emit('PoolCapacityChanged', { poolId, current, capacity });
 }
 
 function startOfLocalDay(date: Date = new Date()): Date {
@@ -120,7 +120,13 @@ export async function listDoneTickets(poolId: string, search?: string) {
   });
 }
 
-export async function addTicketToPool(poolId: string, jiraUrl: string, manualDueDate?: string, note?: string) {
+export async function addTicketToPool(
+  poolId: string,
+  jiraUrl: string,
+  manualDueDate?: string,
+  note?: string,
+  confirmNoDueDate = false,
+) {
   return lockFor(poolId).runExclusive(async () => {
     const key = parseJiraKey(jiraUrl);
 
@@ -134,7 +140,7 @@ export async function addTicketToPool(poolId: string, jiraUrl: string, manualDue
           throw new PoolCapacityExceededError(pool.capacity, current);
         }
 
-        const jira = await resolveIssue(jiraUrl, key, pool.ownerId, tx, manualDueDate);
+        const jira = await resolveIssue(jiraUrl, key, pool.ownerId, tx, manualDueDate, confirmNoDueDate);
 
         return tx.ticket.create({
           data: {
@@ -145,6 +151,7 @@ export async function addTicketToPool(poolId: string, jiraUrl: string, manualDue
             description: jira.description,
             deadline: jira.deadline,
             status: 'Normal',
+            jiraStatus: jira.jiraStatus,
             note: note || null,
           },
         });
@@ -154,7 +161,7 @@ export async function addTicketToPool(poolId: string, jiraUrl: string, manualDue
 
     const pool = await prisma.pool.findUniqueOrThrow({ where: { id: poolId } });
     const current = await prisma.ticket.count({ where: activeTicketWhere(poolId) });
-    getIo()?.to(poolId).emit('TicketAdded', { ticket });
+    appEvents.emit('TicketAdded', { ticket });
     emitPoolCapacityChanged(poolId, current, pool.capacity);
 
     return ticket;
@@ -171,7 +178,7 @@ export async function markTicketDone(poolId: string, ticketId: string) {
       data: { status: 'Done', doneAt: new Date() },
     });
 
-    getIo()?.to(poolId).emit('TicketDone', { ticketId });
+    appEvents.emit('TicketDone', { ticketId, poolId });
     return ticket;
   });
 }
@@ -179,7 +186,12 @@ export async function markTicketDone(poolId: string, ticketId: string) {
 export async function updateTicket(
   poolId: string,
   ticketId: string,
-  data: { deadline?: Date; warningLeadMinutes?: number | null; note?: string | null },
+  data: {
+    deadline?: Date;
+    warningLeadMinutes?: number | null;
+    note?: string | null;
+    jiraStatus?: string | null;
+  },
 ) {
   return lockFor(poolId).runExclusive(async () => {
     const existing = await prisma.ticket.findUnique({ where: { id: ticketId } });
@@ -206,8 +218,9 @@ export async function updateTicket(
     });
 
     if (shouldResolve) {
-      getIo()?.to(poolId).emit('TicketResolved', { ticketId });
+      appEvents.emit('TicketResolved', { ticketId, poolId });
     }
+    appEvents.emit('TicketUpdated', { ticketId, poolId });
 
     return ticket;
   });
@@ -223,7 +236,7 @@ export async function removeTicket(poolId: string, ticketId: string) {
     const pool = await prisma.pool.findUniqueOrThrow({ where: { id: poolId } });
     const current = await prisma.ticket.count({ where: activeTicketWhere(poolId) });
 
-    getIo()?.to(poolId).emit('TicketResolved', { ticketId });
+    appEvents.emit('TicketResolved', { ticketId, poolId });
     emitPoolCapacityChanged(poolId, current, pool.capacity);
   });
 }

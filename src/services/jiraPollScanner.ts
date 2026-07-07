@@ -45,8 +45,15 @@ export async function runJiraPollScan(): Promise<void> {
     }
     if (!update) continue;
 
-    if (update.deadline && update.deadline.getTime() !== ticket.deadline.getTime()) {
-      await updateTicket(ticket.poolId, ticket.id, { deadline: update.deadline });
+    const patch: { deadline?: Date; jiraStatus?: string | null } = {};
+    if (update.deadline && update.deadline.getTime() !== ticket.deadline?.getTime()) {
+      patch.deadline = update.deadline;
+    }
+    if (update.jiraStatus !== ticket.jiraStatus) {
+      patch.jiraStatus = update.jiraStatus;
+    }
+    if (Object.keys(patch).length > 0) {
+      await updateTicket(ticket.poolId, ticket.id, patch);
     }
 
     if (update.statusCategoryKey === 'done') {

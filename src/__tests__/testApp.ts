@@ -1,19 +1,19 @@
 import { PrismaClient } from '@prisma/client';
 import { execFileSync } from 'child_process';
+import { EventEmitter } from 'events';
 import fs from 'fs';
 import http from 'http';
 import { AddressInfo } from 'net';
 import path from 'path';
-import { Server } from 'socket.io';
 
 export interface TestAppContext {
   port: number;
   userId: string;
   userEmail: string;
   httpServer: http.Server;
-  io: Server;
+  appEvents: EventEmitter;
   prisma: PrismaClient;
-  runDeadlineScan: (io: Server) => Promise<void>;
+  runDeadlineScan: () => Promise<void>;
   runJiraPollScan: () => Promise<void>;
   getJiraPollStatus: () => { lastAttemptAt: Date | null; offline: boolean };
   close: () => Promise<void>;
@@ -36,17 +36,13 @@ export async function buildTestApp(): Promise<TestAppContext> {
 
   const { createApp } = await import('../app');
   const { prisma } = await import('../prismaClient');
-  const { setIo } = await import('../sockets/ioInstance');
-  const { initSockets } = await import('../sockets/index');
+  const { appEvents } = await import('../lib/appEvents');
   const { initLocalUser } = await import('../middleware/localUser');
   const { runDeadlineScan } = await import('../services/deadlineScanner');
   const { runJiraPollScan, getJiraPollStatus } = await import('../services/jiraPollScanner');
 
   const app = createApp();
   const httpServer = http.createServer(app);
-  const io = new Server(httpServer, { cors: { origin: '*' } });
-  setIo(io);
-  initSockets(io);
 
   await new Promise<void>((resolve) => httpServer.listen(0, resolve));
   const port = (httpServer.address() as AddressInfo).port;
@@ -58,7 +54,7 @@ export async function buildTestApp(): Promise<TestAppContext> {
     userId: localUser.id,
     userEmail: localUser.email,
     httpServer,
-    io,
+    appEvents,
     prisma,
     runDeadlineScan,
     runJiraPollScan,
@@ -66,7 +62,6 @@ export async function buildTestApp(): Promise<TestAppContext> {
     close: async () => {
       await prisma.$disconnect();
       await new Promise<void>((resolve) => httpServer.close(() => resolve()));
-      io.close();
       for (const suffix of ['', '-journal', '-wal', '-shm']) {
         const f = dbFile + suffix;
         if (fs.existsSync(f)) fs.unlinkSync(f);

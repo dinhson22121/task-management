@@ -44,13 +44,45 @@ interface RawJiraIssueFields {
   description: unknown;
   duedate: string | null;
   statusCategoryKey: string | null;
+  statusName: string | null;
 }
 
-async function fetchJiraIssueFields(cloudId: string, accessToken: string, key: string): Promise<RawJiraIssueFields> {
-  const res = await fetch(
-    `https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/issue/${key}?fields=summary,description,duedate,status`,
-    { headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' } },
-  );
+export interface JiraAuthContext {
+  authMethod: string;
+  cloudId: string | null;
+  siteUrl: string | null;
+  email: string | null;
+  secret: string;
+}
+
+function isConnectionUsable(connection: {
+  authMethod: string;
+  cloudId: string | null;
+  siteUrl: string | null;
+  email: string | null;
+} | null): boolean {
+  if (!connection) return false;
+  if (connection.authMethod === 'api_token') return !!connection.siteUrl && !!connection.email;
+  return !!connection.cloudId;
+}
+
+function buildJiraRequest(auth: JiraAuthContext, path: string): { url: string; headers: Record<string, string> } {
+  if (auth.authMethod === 'api_token') {
+    const basic = Buffer.from(`${auth.email}:${auth.secret}`).toString('base64');
+    return {
+      url: `${auth.siteUrl}${path}`,
+      headers: { Authorization: `Basic ${basic}`, Accept: 'application/json' },
+    };
+  }
+  return {
+    url: `https://api.atlassian.com/ex/jira/${auth.cloudId}${path}`,
+    headers: { Authorization: `Bearer ${auth.secret}`, Accept: 'application/json' },
+  };
+}
+
+async function fetchJiraIssueFields(auth: JiraAuthContext, key: string): Promise<RawJiraIssueFields> {
+  const { url, headers } = buildJiraRequest(auth, `/rest/api/3/issue/${key}?fields=summary,description,duedate,status`);
+  const res = await fetch(url, { headers });
   if (res.status === 401) throw new JiraReauthRequiredError();
   if (!res.ok) throw new AppError('JiraIssueFetchFailed', 502, { status: res.status });
 
@@ -59,7 +91,7 @@ async function fetchJiraIssueFields(cloudId: string, accessToken: string, key: s
       summary: string;
       description: unknown;
       duedate: string | null;
-      status?: { statusCategory?: { key?: string } };
+      status?: { name?: string; statusCategory?: { key?: string } };
     };
   };
   return {
@@ -67,6 +99,7 @@ async function fetchJiraIssueFields(cloudId: string, accessToken: string, key: s
     description: data.fields.description,
     duedate: data.fields.duedate,
     statusCategoryKey: data.fields.status?.statusCategory?.key ?? null,
+    statusName: data.fields.status?.name ?? null,
   };
 }
 
@@ -76,6 +109,7 @@ export async function resolveIssue(
   ownerId: string,
   client: PrismaOrTx = prisma,
   manualDueDate?: string,
+  confirmNoDueDate = false,
 ): Promise<JiraIssueData> {
   const user = await client.user.findUniqueOrThrow({ where: { id: ownerId } });
 
@@ -84,30 +118,36 @@ export async function resolveIssue(
       title: `Mock title for ${key}`,
       description: `Auto-generated mock description for ${key} (source: ${jiraUrl})`,
       deadline: new Date(Date.now() + DEFAULT_DEADLINE_OFFSET_MS),
+      jiraStatus: 'In Progress',
     };
   }
 
   const connection = await client.integrationConnection.findUnique({
     where: { userId_provider: { userId: ownerId, provider: 'jira' } },
   });
-  if (!connection?.cloudId) throw new JiraNotConnectedError();
+  if (!isConnectionUsable(connection)) throw new JiraNotConnectedError();
 
-  const accessToken = decrypt(connection.authTokenEncrypted);
-  const fields = await fetchJiraIssueFields(connection.cloudId, accessToken, key);
+  const secret = decrypt(connection!.authTokenEncrypted);
+  const fields = await fetchJiraIssueFields(
+    { authMethod: connection!.authMethod, cloudId: connection!.cloudId, siteUrl: connection!.siteUrl, email: connection!.email, secret },
+    key,
+  );
 
   const dueDateOnly = fields.duedate ?? manualDueDate;
-  if (!dueDateOnly) throw new DueDateRequiredError();
+  if (!dueDateOnly && !confirmNoDueDate) throw new DueDateRequiredError();
 
   return {
     title: fields.summary,
     description: adfToPlainText(fields.description),
-    deadline: dueDateToDeadline(dueDateOnly, user.workingHourEnd),
+    deadline: dueDateOnly ? dueDateToDeadline(dueDateOnly, user.workingHourEnd) : null,
+    jiraStatus: fields.statusName,
   };
 }
 
 export interface JiraIssueUpdate {
   deadline: Date | null;
   statusCategoryKey: string | null;
+  jiraStatus: string | null;
 }
 
 export async function fetchIssueUpdate(
@@ -118,14 +158,18 @@ export async function fetchIssueUpdate(
   const connection = await client.integrationConnection.findUnique({
     where: { userId_provider: { userId: ownerId, provider: 'jira' } },
   });
-  if (!connection?.cloudId) return null;
+  if (!isConnectionUsable(connection)) return null;
 
   const user = await client.user.findUniqueOrThrow({ where: { id: ownerId } });
-  const accessToken = decrypt(connection.authTokenEncrypted);
-  const fields = await fetchJiraIssueFields(connection.cloudId, accessToken, key);
+  const secret = decrypt(connection!.authTokenEncrypted);
+  const fields = await fetchJiraIssueFields(
+    { authMethod: connection!.authMethod, cloudId: connection!.cloudId, siteUrl: connection!.siteUrl, email: connection!.email, secret },
+    key,
+  );
 
   return {
     deadline: fields.duedate ? dueDateToDeadline(fields.duedate, user.workingHourEnd) : null,
     statusCategoryKey: fields.statusCategoryKey,
+    jiraStatus: fields.statusName,
   };
 }

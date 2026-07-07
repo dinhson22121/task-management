@@ -1,14 +1,14 @@
 import { Router } from 'express';
 import { env } from '../env';
 import { asyncHandler } from '../lib/asyncHandler';
-import { ValidationError } from '../lib/httpError';
+import { JiraApiTokenInvalidError, ValidationError } from '../lib/httpError';
 import { encrypt } from '../lib/tokenCrypto';
 import { attachLocalUser, AuthedRequest } from '../middleware/localUser';
 import { prisma } from '../prismaClient';
 import { getJiraConfig, saveJiraConfig } from '../services/jiraConfigService';
 import { getJiraPollStatus } from '../services/jiraPollScanner';
 import { buildAuthorizeUrl, consumeState, exchangeCodeForTokens, TokenExchangeResult } from '../services/oauthService';
-import { getIo } from '../sockets/ioInstance';
+import { appEvents } from '../lib/appEvents';
 import { OAuthProviderKind } from '../types';
 
 export const integrationsRouter = Router();
@@ -70,7 +70,7 @@ function registerProvider(provider: OAuthProviderKind, options: RegisterProvider
 
       if (options.respondHtml) {
 
-        getIo()?.emit('IntegrationConnected', { provider });
+        appEvents.emit('IntegrationConnected', { provider });
         res.type('html').send(
           `<!doctype html><html><body style="font-family:-apple-system,sans-serif;text-align:center;padding:60px;">` +
             `<h2>Connected to ${provider === 'jira' ? 'Jira' : provider} ✓</h2>` +
@@ -133,12 +133,61 @@ integrationsRouter.get(
       where: { userId_provider: { userId: req.user!.id, provider: 'jira' } },
     });
     const pollStatus = getJiraPollStatus();
+    const connected = !!connection && (connection.authMethod === 'api_token' ? !!connection.siteUrl : !!connection.cloudId);
     res.json({
-      connected: !!connection?.cloudId,
+      connected,
+      authMethod: connection?.authMethod ?? null,
       siteUrl: connection?.siteUrl ?? undefined,
       siteName: connection?.siteName ?? undefined,
+      email: connection?.email ?? undefined,
       pollOffline: pollStatus.offline,
       lastPollAttemptAt: pollStatus.lastAttemptAt,
     });
+  }),
+);
+
+integrationsRouter.put(
+  '/integrations/jira/api-token',
+  attachLocalUser,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const { siteUrl, email, apiToken } = req.body ?? {};
+    if (!siteUrl || !email || !apiToken) {
+      throw new ValidationError('siteUrl, email and apiToken are all required');
+    }
+    const normalizedSiteUrl = String(siteUrl).replace(/\/+$/, '');
+
+    const basicAuth = Buffer.from(`${email}:${apiToken}`).toString('base64');
+    const verifyRes = await fetch(`${normalizedSiteUrl}/rest/api/3/myself`, {
+      headers: { Authorization: `Basic ${basicAuth}`, Accept: 'application/json' },
+    });
+    if (!verifyRes.ok) throw new JiraApiTokenInvalidError();
+
+    const siteName = new URL(normalizedSiteUrl).hostname.split('.')[0];
+
+    await prisma.integrationConnection.upsert({
+      where: { userId_provider: { userId: req.user!.id, provider: 'jira' } },
+      update: {
+        authMethod: 'api_token',
+        authTokenEncrypted: encrypt(apiToken),
+        refreshTokenEncrypted: null,
+        expiresAt: null,
+        cloudId: null,
+        siteUrl: normalizedSiteUrl,
+        siteName,
+        email,
+      },
+      create: {
+        userId: req.user!.id,
+        provider: 'jira',
+        authMethod: 'api_token',
+        authTokenEncrypted: encrypt(apiToken),
+        siteUrl: normalizedSiteUrl,
+        siteName,
+        email,
+      },
+    });
+
+    appEvents.emit('IntegrationConnected', { provider: 'jira' });
+    res.json({ connected: true, provider: 'jira' });
   }),
 );

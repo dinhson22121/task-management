@@ -120,6 +120,15 @@ function createTray() {
   );
 }
 
+function wireAppEvents() {
+  const { appEvents, APP_EVENT_NAMES } = require(path.join(__dirname, '..', 'dist', 'lib', 'appEvents.js'));
+  APP_EVENT_NAMES.forEach((type) => {
+    appEvents.on(type, (payload) => {
+      mainWindow?.webContents.send('app-event', { type, payload });
+    });
+  });
+}
+
 async function bootstrap() {
   applyPackagedEnvOverrides();
 
@@ -127,6 +136,7 @@ async function bootstrap() {
 
   const { startServer } = require(path.join(__dirname, '..', 'dist', 'server.js'));
   await startServer();
+  wireAppEvents();
 
   createWindow();
   createTray();

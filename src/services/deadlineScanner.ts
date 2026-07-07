@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { Server } from 'socket.io';
+import { appEvents } from '../lib/appEvents';
 import { env } from '../env';
 import { prisma } from '../prismaClient';
 import { getNotificationProvider } from './notificationProviders';
@@ -14,7 +14,9 @@ async function notifyOwner(
   await provider.send({ id: ticketId, ticketId, type, channel: 'chat' }, owner);
 }
 
-export async function runDeadlineScan(io: Server): Promise<void> {
+const PENDING_DUE_DATE_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+
+export async function runDeadlineScan(): Promise<void> {
   const tickets = await prisma.ticket.findMany({
     where: { status: { not: 'Done' } },
     include: { pool: { include: { owner: true } } },
@@ -22,6 +24,15 @@ export async function runDeadlineScan(io: Server): Promise<void> {
   const now = new Date();
 
   for (const ticket of tickets) {
+    if (!ticket.deadline) {
+      if (ticket.status !== 'Overdue' && now.getTime() - ticket.addedAt.getTime() >= PENDING_DUE_DATE_TIMEOUT_MS) {
+        await prisma.ticket.update({ where: { id: ticket.id }, data: { status: 'Overdue' } });
+        await notifyOwner(ticket.id, 'Overdue', ticket.pool.owner);
+        appEvents.emit('TicketOverdue', { ticketId: ticket.id, poolId: ticket.poolId, deadline: null });
+      }
+      continue;
+    }
+
     const lead = ticket.warningLeadMinutes ?? ticket.pool.owner.defaultWarningLeadMinutes;
 
     if (now >= ticket.deadline) {
@@ -29,13 +40,14 @@ export async function runDeadlineScan(io: Server): Promise<void> {
         await prisma.ticket.update({ where: { id: ticket.id }, data: { status: 'Overdue' } });
         await notifyOwner(ticket.id, 'Overdue', ticket.pool.owner);
       }
-      io.to(ticket.poolId).emit('TicketOverdue', { ticketId: ticket.id, deadline: ticket.deadline });
+      appEvents.emit('TicketOverdue', { ticketId: ticket.id, poolId: ticket.poolId, deadline: ticket.deadline });
     } else if (now >= new Date(ticket.deadline.getTime() - lead * 60000)) {
       if (ticket.status !== 'Warning') {
         await prisma.ticket.update({ where: { id: ticket.id }, data: { status: 'Warning' } });
         await notifyOwner(ticket.id, 'Warning', ticket.pool.owner);
-        io.to(ticket.poolId).emit('TicketWarning', {
+        appEvents.emit('TicketWarning', {
           ticketId: ticket.id,
+          poolId: ticket.poolId,
           deadline: ticket.deadline,
           minutesRemaining: Math.round((ticket.deadline.getTime() - now.getTime()) / 60000),
         });
@@ -44,8 +56,8 @@ export async function runDeadlineScan(io: Server): Promise<void> {
   }
 }
 
-export function startDeadlineScanner(io: Server) {
+export function startDeadlineScanner() {
   return cron.schedule('*/30 * * * * *', () => {
-    runDeadlineScan(io).catch((err) => console.error('deadlineScanner tick failed', err));
+    runDeadlineScan().catch((err) => console.error('deadlineScanner tick failed', err));
   });
 }

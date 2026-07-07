@@ -121,6 +121,8 @@
   .badge-warning { background:#fff3c4; color:#8a6300; }
   .badge-overdue { background:#ffe1de; color:#c1372b; }
   .badge-done { background:#dff5e1; color:#1e7a3a; }
+  .badge-jira { background:#e6eefc; color:#1f4e9c; }
+  .t-badges { display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
   .t-actions { display:flex; gap:6px; }
   .t-btn { flex:1; font-size:11px; font-weight:700; padding:4px 0; border-radius:8px; border:2px solid #1a1a2e; background:#fff; color:#1a1a2e; cursor:pointer; font-family:'Baloo 2', sans-serif; }
   .t-btn:hover { background:#1a1a2e; color:#fff; }
@@ -230,22 +232,37 @@
           <label class="field-label">Poll interval (seconds, min 15)</label>
           <input class="field-input" type="number" min="15" id="jiraPollIntervalInput" placeholder="300"/>
 
-          <label class="field-label">Client ID</label>
-          <input class="field-input" type="text" id="jiraClientIdInput" placeholder="Your Atlassian OAuth Client ID">
-
-          <label class="field-label">Client Secret</label>
-          <input class="field-input" type="password" id="jiraClientSecretInput" placeholder="Your Atlassian OAuth Client Secret">
-
-          <button class="save-btn" id="saveJiraConfigBtn">Save Jira credentials</button>
-          <div class="toast" id="jiraConfigToast">Saved ✓</div>
-
-          <label class="field-label">Redirect URI (paste into your Atlassian app)</label>
-          <div class="field-row">
-            <input class="field-input" type="text" id="jiraRedirectUriInput" readonly>
-            <button class="icon-btn-sm" id="copyRedirectUriBtn" title="Copy">📋</button>
+          <div class="segmented" id="jiraAuthMethodSegmented">
+            <button data-method="oauth" class="active">OAuth</button>
+            <button data-method="api_token">API Token</button>
           </div>
 
-          <button class="save-btn" id="connectJiraBtn" disabled>Connect Jira</button>
+          <div id="jiraOAuthFields">
+            <label class="field-label">Client ID</label>
+            <input class="field-input" type="text" id="jiraClientIdInput" placeholder="Your Atlassian OAuth Client ID">
+
+            <label class="field-label">Client Secret</label>
+            <input class="field-input" type="password" id="jiraClientSecretInput" placeholder="Your Atlassian OAuth Client Secret">
+
+            <label class="field-label">Redirect URI (paste into your Atlassian app)</label>
+            <div class="field-row">
+              <input class="field-input" type="text" id="jiraRedirectUriInput" readonly>
+              <button class="icon-btn-sm" id="copyRedirectUriBtn" title="Copy">📋</button>
+            </div>
+
+            <button class="save-btn" id="connectJiraBtn" disabled>Connect Jira</button>
+          </div>
+
+          <div id="jiraApiTokenFields" class="hidden">
+            <label class="field-label">Jira site URL</label>
+            <input class="field-input" type="text" id="jiraSiteUrlInput" placeholder="https://yourorg.atlassian.net">
+
+            <label class="field-label">Email</label>
+            <input class="field-input" type="text" id="jiraEmailInput" placeholder="you@example.com">
+
+            <label class="field-label">API Token</label>
+            <input class="field-input" type="password" id="jiraApiTokenInput" placeholder="Your Jira API token">
+          </div>
         </div>
       </div>
     </div>
@@ -281,9 +298,8 @@
       <p class="hint" id="addHint">Pool is 7/10 — this will succeed. If the pool were full, you'd need to remove a ticket first.</p>
 
       <div id="dueDateSection" class="hidden">
-        <label class="field-label">This issue has no due date — enter one</label>
-        <input class="field-input" type="date" id="manualDueDateInput"/>
-        <button class="save-btn" id="confirmDueDateBtn">Confirm deadline &amp; add</button>
+        <p class="hint" id="dueDateWarningText">This Jira issue has no due date yet. You can add it anyway — we'll keep checking Jira and fill in the due date automatically once it's set.</p>
+        <button class="save-btn" id="confirmDueDateBtn">Add anyway</button>
       </div>
     </div>
 
@@ -310,10 +326,8 @@
   </div>
 </div>
 
-<script src="http://localhost:4000/socket.io/socket.io.js"></script>
 <script>
   const API_BASE = 'http://localhost:4000';
-  const SOCKET_URL = 'http://localhost:4000';
 
   let lastIgnoreMouseEvents = null;
   document.addEventListener('mousemove', (e) => {
@@ -372,7 +386,6 @@
     if (openPanel === 'add') {
       document.getElementById('jiraUrlInput').value = '';
       document.getElementById('addNoteInput').value = '';
-      document.getElementById('manualDueDateInput').value = '';
       document.getElementById('dueDateSection').classList.add('hidden');
     }
     if (openPanel === 'tickets') {
@@ -519,6 +532,12 @@
       workingHourEnd: parseTimeStringToMinutes(workingEndInput.value, format),
       textSize: activeSizeBtn ? activeSizeBtn.dataset.size : 'm',
       jiraPollIntervalSeconds: Number(document.getElementById('jiraPollIntervalInput').value),
+      jiraAuthMethod: jiraAuthMethodTab,
+      jiraClientId: document.getElementById('jiraClientIdInput').value,
+      jiraClientSecret: document.getElementById('jiraClientSecretInput').value,
+      jiraSiteUrl: document.getElementById('jiraSiteUrlInput').value,
+      jiraEmail: document.getElementById('jiraEmailInput').value,
+      jiraApiToken: document.getElementById('jiraApiTokenInput').value,
     };
   }
 
@@ -534,7 +553,10 @@
     document.querySelector('#panel-settings [data-save]').classList.toggle('dirty', isDirty);
   }
 
-  ['capacityInput', 'leadDaysInput', 'leadHoursInput', 'leadMinutesInput', 'workingStartInput', 'workingEndInput', 'jiraPollIntervalInput'].forEach(id => {
+  [
+    'capacityInput', 'leadDaysInput', 'leadHoursInput', 'leadMinutesInput', 'workingStartInput', 'workingEndInput',
+    'jiraPollIntervalInput', 'jiraClientIdInput', 'jiraClientSecretInput', 'jiraSiteUrlInput', 'jiraEmailInput', 'jiraApiTokenInput',
+  ].forEach(id => {
     document.getElementById(id).addEventListener('input', checkSettingsDirty);
   });
   document.querySelectorAll('#appModeSegmented button, #timeFormatSegmented button').forEach(btn => {
@@ -550,7 +572,6 @@
 
   let activePoolId = localStorage.getItem('activePoolId') || null;
   let pools = [];
-  let socket = null;
 
   async function api(path, options) {
     options = options || {};
@@ -580,17 +601,21 @@
     localStorage.setItem('activePoolId', activePoolId);
   }
 
-  function connectSocket() {
-    socket = io(SOCKET_URL);
-    socket.on('connect', () => { if (activePoolId) socket.emit('joinPool', activePoolId); });
-    ['TicketAdded', 'TicketWarning', 'TicketOverdue', 'TicketResolved', 'TicketDone', 'PoolCapacityChanged', 'IntegrationConnected'].forEach(evt => {
-      socket.on(evt, payload => handleSocketEvent(evt, payload));
+  function eventPoolId(type, payload) {
+    return type === 'TicketAdded' ? payload.ticket.poolId : payload.poolId;
+  }
+
+  function listenForAppEvents() {
+    window.electronAPI.onAppEvent((type, payload) => {
+      const poolId = eventPoolId(type, payload);
+      if (poolId && poolId !== activePoolId) return;
+      handleSocketEvent(type, payload);
     });
   }
 
   async function bootstrap() {
     await ensureActivePool();
-    connectSocket();
+    listenForAppEvents();
   }
   bootstrap();
 
@@ -617,6 +642,7 @@
     document.getElementById('jiraPollIntervalInput').value = settings.jiraPollIntervalSeconds;
 
     jiraEditMode = null;
+    jiraAuthMethodTab = null;
 
     await loadJiraPanel();
     markSettingsClean();
@@ -625,7 +651,6 @@
   document.getElementById('poolSelect').addEventListener('change', async (e) => {
     activePoolId = e.target.value;
     localStorage.setItem('activePoolId', activePoolId);
-    if (socket) socket.emit('joinPool', activePoolId);
     await loadSettingsPanel();
   });
 
@@ -643,27 +668,66 @@
       return;
     }
     const jiraPollIntervalSeconds = Number(document.getElementById('jiraPollIntervalInput').value);
-    const [poolRes, settingsRes] = await Promise.all([
+
+    const requests = [
       api('/pools/' + activePoolId, { method: 'PATCH', body: JSON.stringify({ capacity }) }),
       api('/users/me/settings', {
         method: 'PATCH',
         body: JSON.stringify({ defaultWarningLeadMinutes: leadMinutes, appMode, workingHourStart, workingHourEnd, timeFormat, jiraPollIntervalSeconds }),
       }),
-    ]);
-    if (!poolRes.ok || !settingsRes.ok) {
-      const failed = !settingsRes.ok ? await settingsRes.json() : await poolRes.json();
-      showToast(toast, failed.error || 'Save failed', true);
+    ];
+
+    if (appMode === 'production' && jiraAuthMethodTab === 'oauth') {
+      const clientId = document.getElementById('jiraClientIdInput').value;
+      const clientSecret = document.getElementById('jiraClientSecretInput').value;
+      if (clientId && clientSecret) {
+        requests.push(api('/integrations/jira/config', { method: 'PUT', body: JSON.stringify({ clientId, clientSecret }) }));
+      }
+    }
+    if (appMode === 'production' && jiraAuthMethodTab === 'api_token') {
+      const siteUrl = document.getElementById('jiraSiteUrlInput').value.trim();
+      const email = document.getElementById('jiraEmailInput').value.trim();
+      const apiToken = document.getElementById('jiraApiTokenInput').value;
+      if (siteUrl && email && apiToken) {
+        requests.push(api('/integrations/jira/api-token', { method: 'PUT', body: JSON.stringify({ siteUrl, email, apiToken }) }));
+      }
+    }
+
+    const [poolRes, settingsRes, ...jiraResponses] = await Promise.all(requests);
+    const failedJiraRes = jiraResponses.find((r) => !r.ok);
+    if (!poolRes.ok || !settingsRes.ok || failedJiraRes) {
+      const failedRes = !poolRes.ok ? poolRes : !settingsRes.ok ? settingsRes : failedJiraRes;
+      const failed = await failedRes.json().catch(() => ({}));
+      showToast(toast, failed.message || failed.error || 'Save failed', true);
       return;
     }
     const settings = await settingsRes.json();
     currentWorkingHourStart = settings.workingHourStart;
     currentWorkingHourEnd = settings.workingHourEnd;
+    document.getElementById('jiraClientSecretInput').value = '';
+    document.getElementById('jiraApiTokenInput').value = '';
     await refreshPools();
+    await loadJiraPanel();
     showToast(toast, 'Saved ✓', false);
     markSettingsClean();
   });
 
   let jiraEditMode = null;
+  let jiraAuthMethodTab = null;
+
+  function applyJiraAuthMethodTab() {
+    document.querySelectorAll('#jiraAuthMethodSegmented button').forEach(b => b.classList.toggle('active', b.dataset.method === jiraAuthMethodTab));
+    document.getElementById('jiraOAuthFields').classList.toggle('hidden', jiraAuthMethodTab !== 'oauth');
+    document.getElementById('jiraApiTokenFields').classList.toggle('hidden', jiraAuthMethodTab !== 'api_token');
+  }
+
+  document.querySelectorAll('#jiraAuthMethodSegmented button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      jiraAuthMethodTab = btn.dataset.method;
+      applyJiraAuthMethodTab();
+      checkSettingsDirty();
+    });
+  });
 
   async function loadJiraPanel() {
     const [configRes, statusRes] = await Promise.all([
@@ -689,6 +753,13 @@
     }
 
     if (jiraEditMode === null) jiraEditMode = !status.connected;
+    if (jiraAuthMethodTab === null) jiraAuthMethodTab = status.authMethod || 'oauth';
+    applyJiraAuthMethodTab();
+
+    if (status.authMethod === 'api_token') {
+      document.getElementById('jiraSiteUrlInput').value = status.siteUrl || '';
+      document.getElementById('jiraEmailInput').value = status.email || '';
+    }
 
     document.getElementById('jiraCredentialsFields').classList.toggle('hidden', !jiraEditMode);
     document.getElementById('editJiraConfigBtn').style.display = !jiraEditMode ? '' : 'none';
@@ -703,23 +774,6 @@
   document.getElementById('editJiraConfigBtn').addEventListener('click', () => {
     jiraEditMode = true;
     loadJiraPanel();
-  });
-
-  document.getElementById('saveJiraConfigBtn').addEventListener('click', async () => {
-    const toast = document.getElementById('jiraConfigToast');
-    const clientId = document.getElementById('jiraClientIdInput').value;
-    const clientSecret = document.getElementById('jiraClientSecretInput').value;
-    const res = await api('/integrations/jira/config', {
-      method: 'PUT',
-      body: JSON.stringify({ clientId, clientSecret }),
-    });
-    if (!res.ok) {
-      showToast(toast, 'Save failed', true);
-      return;
-    }
-    document.getElementById('jiraClientSecretInput').value = '';
-    await loadJiraPanel();
-    showToast(toast, 'Saved ✓', false);
   });
 
   document.getElementById('copyRedirectUriBtn').addEventListener('click', () => {
@@ -744,8 +798,9 @@
     const rowClass = ticket.status === 'Overdue' ? 'ticket-row overdue' : 'ticket-row';
     const doneBtn = ticket.status === 'Done' ? '' : '<button class="t-btn" data-action="done" data-id="' + ticket.id + '">Done</button>';
     const noteHtml = ticket.note ? '<span class="t-note">📝 ' + escapeHtml(ticket.note) + '</span>' : '';
+    const jiraStatusHtml = ticket.jiraStatus ? '<span class="badge badge-jira">' + escapeHtml(ticket.jiraStatus) + '</span>' : '';
     return '<div class="' + rowClass + '"><div class="t-row-top"><div class="t-info"><strong>' + ticket.jiraKey + '</strong><span>' + ticket.title +
-      '</span>' + noteHtml + '</div><span class="badge ' + badgeClass + '">' + ticket.status + '</span></div>' +
+      '</span>' + noteHtml + '</div><span class="t-badges">' + jiraStatusHtml + '<span class="badge ' + badgeClass + '">' + ticket.status + '</span></span></div>' +
       '<div class="t-actions">' + doneBtn + '<button class="t-btn t-btn-danger" data-action="remove" data-id="' + ticket.id + '">Remove</button></div></div>';
   }
 
@@ -810,7 +865,7 @@
       " — this will succeed. If the pool were full, you'd need to remove a ticket first.";
   }
 
-  async function submitAddTicket(dueDate) {
+  async function submitAddTicket(confirmNoDueDate) {
     const input = document.getElementById('jiraUrlInput');
     const noteInput = document.getElementById('addNoteInput');
     const toast = document.getElementById('addToast');
@@ -818,7 +873,7 @@
     const dueDateSection = document.getElementById('dueDateSection');
     const body = { jiraUrl: input.value };
     if (noteInput.value.trim()) body.note = noteInput.value.trim();
-    if (dueDate) body.dueDate = dueDate;
+    if (confirmNoDueDate) body.confirmNoDueDate = true;
 
     const res = await api('/pools/' + activePoolId + '/tickets', { method: 'POST', body: JSON.stringify(body) });
     if (!res.ok) {
@@ -828,7 +883,9 @@
         hint.textContent = 'Pool is ' + failed.current + '/' + failed.capacity + ' — remove a ticket first.';
         dueDateSection.classList.add('hidden');
       } else if (failed.error === 'DueDateRequired') {
-        hint.textContent = failed.message || 'This Jira issue has no due date.';
+        hint.textContent = '';
+        document.getElementById('dueDateWarningText').textContent =
+          failed.message || "This Jira issue has no due date yet. You can add it anyway — we'll keep checking Jira and fill in the due date automatically once it's set.";
         dueDateSection.classList.remove('hidden');
       } else if (['JiraNotConnected', 'JiraReauthRequired', 'JiraNotConfigured'].includes(failed.error)) {
         hint.textContent = failed.message || 'Jira is not connected — check Settings.';
@@ -840,18 +897,13 @@
     }
     input.value = '';
     noteInput.value = '';
-    document.getElementById('manualDueDateInput').value = '';
     dueDateSection.classList.add('hidden');
     showToast(toast, 'Added ✓', false);
   }
 
-  document.querySelector('#panel-add [data-save]').addEventListener('click', () => submitAddTicket());
+  document.querySelector('#panel-add [data-save]').addEventListener('click', () => submitAddTicket(false));
 
-  document.getElementById('confirmDueDateBtn').addEventListener('click', () => {
-    const dueDate = document.getElementById('manualDueDateInput').value;
-    if (!dueDate) return;
-    submitAddTicket(dueDate);
-  });
+  document.getElementById('confirmDueDateBtn').addEventListener('click', () => submitAddTicket(true));
 
   const activeAlerts = new Map();
 

@@ -1,16 +1,13 @@
-import { io as ioClient, Socket as ClientSocket } from 'socket.io-client';
 import { buildTestApp, TestAppContext } from './testApp';
 
 describe('deadline scanner', () => {
   let ctx: TestAppContext;
-  let client: ClientSocket;
 
   beforeAll(async () => {
     ctx = await buildTestApp();
   });
 
   afterAll(async () => {
-    client?.close();
     await ctx.close();
   });
 
@@ -29,22 +26,14 @@ describe('deadline scanner', () => {
       },
     });
 
-    client = ioClient(`http://localhost:${ctx.port}`, {
-      transports: ['websocket'],
-    });
-    await new Promise<void>((resolve, reject) => {
-      client.on('connect', () => resolve());
-      client.on('connect_error', reject);
-    });
-    client.emit('joinPool', pool.id);
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
     const overdueEvents: Array<{ ticketId: string; deadline: string }> = [];
-    client.on('TicketOverdue', (payload) => overdueEvents.push(payload));
+    const onOverdue = (payload: { ticketId: string; deadline: string }) => overdueEvents.push(payload);
+    ctx.appEvents.on('TicketOverdue', onOverdue);
 
-    await ctx.runDeadlineScan(ctx.io);
-    await ctx.runDeadlineScan(ctx.io);
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    await ctx.runDeadlineScan();
+    await ctx.runDeadlineScan();
+
+    ctx.appEvents.off('TicketOverdue', onOverdue);
 
     expect(overdueEvents).toHaveLength(2);
     expect(overdueEvents[0].ticketId).toBe(ticket.id);
@@ -52,5 +41,49 @@ describe('deadline scanner', () => {
 
     const updated = await ctx.prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
     expect(updated.status).toBe('Overdue');
+  });
+
+  it('flips a ticket with no due date to Overdue once it has been pending for over 24 hours', async () => {
+    const pool = await ctx.prisma.pool.create({
+      data: { ownerId: ctx.userId, name: 'Pending Pool', capacity: 5 },
+    });
+    const ticket = await ctx.prisma.ticket.create({
+      data: {
+        poolId: pool.id,
+        jiraKey: 'ENG-10',
+        jiraUrl: 'https://example.atlassian.net/browse/ENG-10',
+        title: 'No due date ticket',
+        deadline: null,
+        status: 'Normal',
+        addedAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+      },
+    });
+
+    await ctx.runDeadlineScan();
+
+    const updated = await ctx.prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+    expect(updated.status).toBe('Overdue');
+  });
+
+  it('leaves a ticket with no due date as Normal within the 24 hour grace period', async () => {
+    const pool = await ctx.prisma.pool.create({
+      data: { ownerId: ctx.userId, name: 'Pending Pool 2', capacity: 5 },
+    });
+    const ticket = await ctx.prisma.ticket.create({
+      data: {
+        poolId: pool.id,
+        jiraKey: 'ENG-11',
+        jiraUrl: 'https://example.atlassian.net/browse/ENG-11',
+        title: 'No due date ticket, recent',
+        deadline: null,
+        status: 'Normal',
+        addedAt: new Date(Date.now() - 60 * 60 * 1000),
+      },
+    });
+
+    await ctx.runDeadlineScan();
+
+    const updated = await ctx.prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+    expect(updated.status).toBe('Normal');
   });
 });

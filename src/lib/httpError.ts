@@ -62,3 +62,9 @@ export class DueDateRequiredError extends AppError {
     super('DueDateRequired', 400, { message: 'This Jira issue has no due date. Enter one to add it.' });
   }
 }
+
+export class JiraApiTokenInvalidError extends AppError {
+  constructor() {
+    super('JiraApiTokenInvalid', 401, { message: 'Could not verify this Jira email/API token — check your credentials.' });
+  }
+}

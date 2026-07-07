@@ -27,8 +27,8 @@ ticketsRouter.get(
 ticketsRouter.post(
   '/',
   asyncHandler(async (req, res) => {
-    const { jiraUrl, dueDate, note } = req.body ?? {};
-    const ticket = await poolService.addTicketToPool(req.params.id, jiraUrl, dueDate, note);
+    const { jiraUrl, dueDate, note, confirmNoDueDate } = req.body ?? {};
+    const ticket = await poolService.addTicketToPool(req.params.id, jiraUrl, dueDate, note, confirmNoDueDate);
     res.status(201).json(ticket);
   }),
 );

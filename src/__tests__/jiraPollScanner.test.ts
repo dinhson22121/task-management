@@ -42,7 +42,7 @@ describe('Jira poll scanner', () => {
     });
   }
 
-  async function makeTicket(jiraKey: string, deadline: Date) {
+  async function makeTicket(jiraKey: string, deadline: Date | null, jiraStatus: string | null = null) {
     const pool = await ctx.prisma.pool.create({
       data: { ownerId: ctx.userId, name: `Pool-${jiraKey}`, capacity: 5 },
     });
@@ -54,15 +54,23 @@ describe('Jira poll scanner', () => {
         title: `Ticket ${jiraKey}`,
         deadline,
         status: 'Normal',
+        jiraStatus,
       },
     });
   }
 
-  function mockJiraIssue(duedate: string | null, statusCategoryKey: string) {
+  function mockJiraIssue(duedate: string | null, statusCategoryKey: string, statusName = 'In Progress') {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ fields: { summary: 'x', description: null, duedate, status: { statusCategory: { key: statusCategoryKey } } } }),
+      json: async () => ({
+        fields: {
+          summary: 'x',
+          description: null,
+          duedate,
+          status: { name: statusName, statusCategory: { key: statusCategoryKey } },
+        },
+      }),
     }) as unknown as typeof fetch;
   }
 
@@ -74,9 +82,9 @@ describe('Jira poll scanner', () => {
     await ctx.runJiraPollScan();
 
     const updated = await ctx.prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
-    expect(updated.deadline.getMonth()).toBe(1);
-    expect(updated.deadline.getDate()).toBe(1);
-    expect(updated.deadline.getHours()).toBe(17);
+    expect(updated.deadline?.getMonth()).toBe(1);
+    expect(updated.deadline?.getDate()).toBe(1);
+    expect(updated.deadline?.getHours()).toBe(17);
   });
 
   it('marks the ticket Done when Jira reports the done status category', async () => {
@@ -142,7 +150,7 @@ describe('Jira poll scanner', () => {
     await expect(ctx.runJiraPollScan()).resolves.toBeUndefined();
 
     const okUpdated = await ctx.prisma.ticket.findUniqueOrThrow({ where: { id: okTicket.id } });
-    expect(okUpdated.deadline.getMonth()).toBe(3);
+    expect(okUpdated.deadline?.getMonth()).toBe(3);
 
     const failingUnchanged = await ctx.prisma.ticket.findUniqueOrThrow({ where: { id: failing.id } });
     expect(failingUnchanged.deadline).toEqual(new Date('2026-01-01T17:00:00'));
@@ -158,6 +166,30 @@ describe('Jira poll scanner', () => {
     await ctx.runJiraPollScan();
 
     expect(ctx.getJiraPollStatus().offline).toBe(true);
+  });
+
+  it('backfills the deadline for a pending ticket once Jira reports a due date', async () => {
+    await connectJira();
+    const ticket = await makeTicket('POLL-6', null);
+    mockJiraIssue('2026-06-01', 'indeterminate');
+
+    await ctx.runJiraPollScan();
+
+    const updated = await ctx.prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+    expect(updated.deadline).not.toBeNull();
+    expect(updated.deadline?.getMonth()).toBe(5);
+    expect(updated.deadline?.getDate()).toBe(1);
+  });
+
+  it('refreshes jiraStatus when the Jira status changes', async () => {
+    await connectJira();
+    const ticket = await makeTicket('POLL-7', new Date('2026-01-01T17:00:00'), 'To Do');
+    mockJiraIssue('2026-01-01', 'indeterminate', 'In Review');
+
+    await ctx.runJiraPollScan();
+
+    const updated = await ctx.prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+    expect(updated.jiraStatus).toBe('In Review');
   });
 
   it('reports online when at least one ticket is fetched successfully', async () => {

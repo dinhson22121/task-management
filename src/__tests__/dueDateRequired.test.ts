@@ -30,11 +30,13 @@ describe('Production mode: missing Jira due date is blocked', () => {
 
   const base = () => `http://localhost:${ctx.port}`;
 
-  function mockJiraIssue(duedate: string | null) {
+  function mockJiraIssue(duedate: string | null, statusName?: string) {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ fields: { summary: 'Real issue', description: null, duedate } }),
+      json: async () => ({
+        fields: { summary: 'Real issue', description: null, duedate, status: statusName ? { name: statusName } : undefined },
+      }),
     }) as unknown as typeof fetch;
   }
 
@@ -48,6 +50,20 @@ describe('Production mode: missing Jira due date is blocked', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('DueDateRequired');
+  });
+
+  it('allows adding without a due date when confirmed, leaving deadline null but setting jiraStatus immediately', async () => {
+    mockJiraIssue(null, 'In Progress');
+    const pool = await ctx.prisma.pool.create({ data: { ownerId: ctx.userId, name: 'Confirmed No Due Date Pool', capacity: 5 } });
+
+    const res = await request(base())
+      .post(`/pools/${pool.id}/tickets`)
+      .send({ jiraUrl: 'https://example.atlassian.net/browse/ENG-5004', confirmNoDueDate: true });
+
+    expect(res.status).toBe(201);
+    expect(res.body.deadline).toBeNull();
+    expect(res.body.status).toBe('Normal');
+    expect(res.body.jiraStatus).toBe('In Progress');
   });
 
   it('accepts a manually supplied due date, combined with the working hour end', async () => {

@@ -1,7 +1,8 @@
 export interface JiraIssueData {
   title: string;
   description: string | null;
-  deadline: Date;
+  deadline: Date | null;
+  jiraStatus: string | null;
 }
 
 export interface NotificationEventLike {
