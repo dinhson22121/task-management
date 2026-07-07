@@ -16,6 +16,7 @@ export interface TestAppContext {
   runDeadlineScan: () => Promise<void>;
   runJiraPollScan: () => Promise<void>;
   getJiraPollStatus: () => { lastAttemptAt: Date | null; offline: boolean };
+  purgeExpiredTrash: () => Promise<void>;
   close: () => Promise<void>;
 }
 
@@ -40,6 +41,7 @@ export async function buildTestApp(): Promise<TestAppContext> {
   const { initLocalUser } = await import('../middleware/localUser');
   const { runDeadlineScan } = await import('../services/deadlineScanner');
   const { runJiraPollScan, getJiraPollStatus } = await import('../services/jiraPollScanner');
+  const { purgeExpiredTrash } = await import('../services/ticketRetentionScanner');
 
   const app = createApp();
   const httpServer = http.createServer(app);
@@ -59,6 +61,7 @@ export async function buildTestApp(): Promise<TestAppContext> {
     runDeadlineScan,
     runJiraPollScan,
     getJiraPollStatus,
+    purgeExpiredTrash,
     close: async () => {
       await prisma.$disconnect();
       await new Promise<void>((resolve) => httpServer.close(() => resolve()));

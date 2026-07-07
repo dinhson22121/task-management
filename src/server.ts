@@ -6,6 +6,7 @@ import { ensureSchema } from './lib/dbBootstrap';
 import { initLocalUser } from './middleware/localUser';
 import { startDeadlineScanner } from './services/deadlineScanner';
 import { startJiraPollScanner } from './services/jiraPollScanner';
+import { startTicketRetentionScanner } from './services/ticketRetentionScanner';
 
 export interface StartedServer {
   app: express.Express;
@@ -22,6 +23,7 @@ export async function startServer(): Promise<StartedServer> {
 
   startDeadlineScanner();
   startJiraPollScanner();
+  startTicketRetentionScanner();
 
   await new Promise<void>((resolve) => httpServer.listen(env.PORT, resolve));
 

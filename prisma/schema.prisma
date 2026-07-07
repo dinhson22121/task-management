@@ -48,6 +48,8 @@ model Ticket {
   addedAt             DateTime @default(now())
   doneAt              DateTime?
   note                String?
+  removedFromActiveAt DateTime?
+  deletedAt           DateTime?
 
   @@unique([poolId, jiraKey])
   @@index([deadline])

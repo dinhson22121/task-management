@@ -41,6 +41,14 @@ ticketsRouter.post(
   }),
 );
 
+ticketsRouter.post(
+  '/:ticketId/undo',
+  asyncHandler(async (req, res) => {
+    const ticket = await poolService.undoTicketDone(req.params.id, req.params.ticketId);
+    res.json(ticket);
+  }),
+);
+
 ticketsRouter.patch(
   '/:ticketId',
   asyncHandler(async (req, res) => {
@@ -58,6 +66,14 @@ ticketsRouter.delete(
   '/:ticketId',
   asyncHandler(async (req, res) => {
     await poolService.removeTicket(req.params.id, req.params.ticketId);
+    res.status(204).end();
+  }),
+);
+
+ticketsRouter.delete(
+  '/:ticketId/done',
+  asyncHandler(async (req, res) => {
+    await poolService.softDeleteDoneTicket(req.params.id, req.params.ticketId);
     res.status(204).end();
   }),
 );

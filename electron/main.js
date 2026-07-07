@@ -97,6 +97,11 @@ ipcMain.on('hide-window', (event) => {
   win?.hide();
 });
 
+ipcMain.on('show-window', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  win?.show();
+});
+
 function toggleWindowVisibility() {
   if (!mainWindow) return;
   if (mainWindow.isVisible()) {

@@ -57,6 +57,15 @@ async function ensureTicketNoteColumn(): Promise<void> {
   await prisma.$executeRawUnsafe(`ALTER TABLE "Ticket" ADD COLUMN "note" TEXT`);
 }
 
+async function ensureTicketSoftRemoveColumns(): Promise<void> {
+  if (!(await columnExists('Ticket', 'removedFromActiveAt'))) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Ticket" ADD COLUMN "removedFromActiveAt" DATETIME`);
+  }
+  if (!(await columnExists('Ticket', 'deletedAt'))) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Ticket" ADD COLUMN "deletedAt" DATETIME`);
+  }
+}
+
 async function ensureIntegrationConnectionAuthMethodColumns(): Promise<void> {
   if (!(await columnExists('IntegrationConnection', 'authMethod'))) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "IntegrationConnection" ADD COLUMN "authMethod" TEXT NOT NULL DEFAULT 'oauth'`);
@@ -132,4 +141,5 @@ export async function ensureSchema(): Promise<void> {
   await ensureTicketNoteColumn();
   await ensureTicketDeadlineNullableAndJiraStatus();
   await ensureIntegrationConnectionAuthMethodColumns();
+  await ensureTicketSoftRemoveColumns();
 }

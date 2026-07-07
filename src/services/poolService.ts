@@ -31,7 +31,11 @@ function startOfLocalDay(date: Date = new Date()): Date {
 }
 
 function activeTicketStatusFilter() {
-  return { OR: [{ status: { not: 'Done' } }, { status: 'Done', doneAt: { gte: startOfLocalDay() } }] };
+  return {
+    deletedAt: null,
+    removedFromActiveAt: null,
+    OR: [{ status: { not: 'Done' } }, { status: 'Done', doneAt: { gte: startOfLocalDay() } }],
+  };
 }
 
 function activeTicketWhere(poolId: string) {
@@ -114,6 +118,7 @@ export async function listDoneTickets(poolId: string, search?: string) {
     where: {
       poolId,
       status: 'Done',
+      deletedAt: null,
       ...(search ? { jiraKey: { startsWith: search } } : {}),
     },
     orderBy: { doneAt: 'desc' },
@@ -183,6 +188,33 @@ export async function markTicketDone(poolId: string, ticketId: string) {
   });
 }
 
+export async function undoTicketDone(poolId: string, ticketId: string) {
+  return lockFor(poolId).runExclusive(async () => {
+    const existing = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!existing || existing.poolId !== poolId) throw new NotFoundError('Ticket');
+    if (existing.status !== 'Done') throw new ValidationError('Ticket is not Done');
+
+    const pool = await prisma.pool.findUniqueOrThrow({ where: { id: poolId } });
+    const currentExcludingThis = await prisma.ticket.count({
+      where: { ...activeTicketWhere(poolId), id: { not: ticketId } },
+    });
+    if (currentExcludingThis >= pool.capacity) {
+      throw new PoolCapacityExceededError(pool.capacity, currentExcludingThis);
+    }
+
+    const nextStatus = existing.deadline && existing.deadline.getTime() <= Date.now() ? 'Overdue' : 'Normal';
+    const ticket = await prisma.ticket.update({
+      where: { id: ticketId },
+      data: { status: nextStatus, doneAt: null, removedFromActiveAt: null },
+    });
+
+    const current = await prisma.ticket.count({ where: activeTicketWhere(poolId) });
+    appEvents.emit('TicketUpdated', { ticketId, poolId });
+    emitPoolCapacityChanged(poolId, current, pool.capacity);
+    return ticket;
+  });
+}
+
 export async function updateTicket(
   poolId: string,
   ticketId: string,
@@ -231,12 +263,32 @@ export async function removeTicket(poolId: string, ticketId: string) {
     const existing = await prisma.ticket.findUnique({ where: { id: ticketId } });
     if (!existing || existing.poolId !== poolId) throw new NotFoundError('Ticket');
 
-    await prisma.ticket.delete({ where: { id: ticketId } });
+    if (existing.status === 'Done') {
+      // Keep the Done record for history — only hide it from the active view.
+      await prisma.ticket.update({ where: { id: ticketId }, data: { removedFromActiveAt: new Date() } });
+    } else {
+      await prisma.ticket.delete({ where: { id: ticketId } });
+    }
 
     const pool = await prisma.pool.findUniqueOrThrow({ where: { id: poolId } });
     const current = await prisma.ticket.count({ where: activeTicketWhere(poolId) });
 
     appEvents.emit('TicketResolved', { ticketId, poolId });
+    emitPoolCapacityChanged(poolId, current, pool.capacity);
+  });
+}
+
+export async function softDeleteDoneTicket(poolId: string, ticketId: string) {
+  return lockFor(poolId).runExclusive(async () => {
+    const existing = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!existing || existing.poolId !== poolId) throw new NotFoundError('Ticket');
+    if (existing.status !== 'Done') throw new ValidationError('Ticket is not Done');
+
+    await prisma.ticket.update({ where: { id: ticketId }, data: { deletedAt: new Date() } });
+
+    const pool = await prisma.pool.findUniqueOrThrow({ where: { id: poolId } });
+    const current = await prisma.ticket.count({ where: activeTicketWhere(poolId) });
+    appEvents.emit('TicketUpdated', { ticketId, poolId });
     emitPoolCapacityChanged(poolId, current, pool.capacity);
   });
 }

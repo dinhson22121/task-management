@@ -142,12 +142,12 @@
   .bubble {
     position: absolute; right: 0; bottom: 100%; margin-bottom: 12px;
     width: 210px; background: #ffffff; border: 2.5px solid #2b2f36; border-radius: 16px;
-    padding: 10px 14px; box-shadow: 3px 4px 0 rgba(43,47,54,0.15);
+    padding: 10px 22px 10px 14px; box-shadow: 3px 4px 0 rgba(43,47,54,0.15);
     display: flex; align-items: flex-start; gap: 8px;
     opacity: 0; transform: scale(0.35) translateY(14px); transform-origin: 85% 100%;
     pointer-events: none;
   }
-  .bubble.visible { animation: bubbleIn 0.4s cubic-bezier(.34,1.4,.64,1) forwards; }
+  .bubble.visible { animation: bubbleIn 0.4s cubic-bezier(.34,1.4,.64,1) forwards; pointer-events: auto; }
   @keyframes bubbleIn {
     0%   { opacity: 0; transform: scale(0.35) translateY(14px); }
     60%  { opacity: 1; transform: scale(1.08) translateY(-2px); }
@@ -161,8 +161,14 @@
   .bubble-bell { font-size: 18px; animation: bellWiggle 0.55s ease-in-out infinite; }
   @keyframes bellWiggle { 0%,100%{transform:rotate(-10deg);} 50%{transform:rotate(10deg);} }
   .bubble-text { display: flex; flex-direction: column; }
-  .bubble-text strong { font-size: 14px; color: #2b2f36; font-family: 'Baloo 2', sans-serif; }
-  .bubble-text span { font-size: 12px; color: #5a5f66; font-family: 'Patrick Hand', cursive; }
+  .bubble-text strong { font-size: 14px; color: #c1372b; font-weight: 800; font-family: 'Baloo 2', sans-serif; }
+  .bubble-text span { font-size: 12px; color: #c1372b; font-weight: 700; font-family: 'Patrick Hand', cursive; }
+  .bubble-ticket-link { text-decoration: underline; cursor: pointer; }
+  .bubble-dismiss {
+    position: absolute; top: 4px; right: 6px; border: none; background: none;
+    font-size: 12px; line-height: 1; cursor: pointer; color: #8a8f97; padding: 2px;
+  }
+  .bubble-dismiss:hover { color: #2b2f36; }
 </style>
 </head>
 <body>
@@ -207,6 +213,9 @@
         <button data-size="m" class="active">M</button>
         <button data-size="l">L</button>
       </div>
+
+      <label class="field-label">Re-show warning popup every (seconds, if dismissed)</label>
+      <input class="field-input" type="number" min="3" id="bubbleRenotifySecondsInput" placeholder="10"/>
 
       <label class="field-label">App Mode</label>
       <div class="segmented" id="appModeSegmented">
@@ -282,6 +291,7 @@
       <div id="ticketsDonePage" class="hidden">
         <input class="field-input" type="text" id="doneSearchInput" placeholder="Search by ticket prefix (e.g. ENG-)"/>
         <div id="doneTicketRows"></div>
+        <div class="toast" id="doneToast">Restored ✓</div>
       </div>
     </div>
 
@@ -315,8 +325,9 @@
         <span class="bubble-bell">🔔</span>
         <div class="bubble-text">
           <strong id="bubbleTitle">Ticket overdue!</strong>
-          <span id="bubbleSubtitle">ENG-455 needs your attention</span>
+          <span id="bubbleSubtitle"><span id="bubbleTicketKey" class="bubble-ticket-link"></span> needs your attention</span>
         </div>
+        <button class="bubble-dismiss" id="bubbleDismissBtn" title="Dismiss">✕</button>
       </div>
       <div class="avatar-frame">
         <img class="avatar-photo" id="avatarImg" src="assets/avatar.jpg" alt="Assistant avatar">
@@ -503,6 +514,19 @@
     document.querySelectorAll('#sizeSegmented button').forEach(b => b.classList.toggle('active', b.dataset.size === saved));
   })();
 
+  function getBubbleRenotifySeconds() {
+    const v = Number(localStorage.getItem('bubbleRenotifySeconds'));
+    return v > 0 ? v : 10;
+  }
+
+  document.getElementById('bubbleRenotifySecondsInput').addEventListener('input', () => {
+    localStorage.setItem('bubbleRenotifySeconds', document.getElementById('bubbleRenotifySecondsInput').value);
+    checkSettingsDirty();
+  });
+  (function restoreBubbleRenotifySeconds() {
+    document.getElementById('bubbleRenotifySecondsInput').value = getBubbleRenotifySeconds();
+  })();
+
   function updateJiraSectionVisibility() {
     const activeModeBtn = document.querySelector('#appModeSegmented button.active');
     const appMode = activeModeBtn ? activeModeBtn.dataset.mode : 'demo';
@@ -606,6 +630,7 @@
   }
 
   function listenForAppEvents() {
+    if (!window.electronAPI) return;
     window.electronAPI.onAppEvent((type, payload) => {
       const poolId = eventPoolId(type, payload);
       if (poolId && poolId !== activePoolId) return;
@@ -807,7 +832,9 @@
   function doneTicketRowHtml(ticket) {
     const doneDate = ticket.doneAt ? new Date(ticket.doneAt).toLocaleDateString() : '';
     return '<div class="ticket-row"><div class="t-row-top"><div class="t-info"><strong>' + ticket.jiraKey + '</strong><span>' + ticket.title +
-      '</span></div><span class="badge badge-done">Done ' + doneDate + '</span></div></div>';
+      '</span></div><span class="badge badge-done">Done ' + doneDate + '</span></div>' +
+      '<div class="t-actions"><button class="t-btn" data-action="undo" data-id="' + ticket.id + '">Undo</button>' +
+      '<button class="t-btn t-btn-danger" data-action="remove" data-id="' + ticket.id + '">Remove</button></div></div>';
   }
 
   async function loadTicketsPanel() {
@@ -853,6 +880,30 @@
       await api('/pools/' + activePoolId + '/tickets/' + ticketId, { method: 'DELETE' });
     }
     await loadTicketsPanel();
+  });
+
+  document.getElementById('doneTicketRows').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const toast = document.getElementById('doneToast');
+    if (btn.dataset.action === 'undo') {
+      const res = await api('/pools/' + activePoolId + '/tickets/' + btn.dataset.id + '/undo', { method: 'POST' });
+      if (!res.ok) {
+        const failed = await res.json().catch(() => ({}));
+        showToast(toast, failed.error === 'PoolCapacityExceeded' ? 'Pool is full — remove a ticket first.' : 'Undo failed', true);
+        return;
+      }
+      await loadDoneTicketsPage();
+      showToast(toast, 'Restored ✓', false);
+    } else if (btn.dataset.action === 'remove') {
+      const res = await api('/pools/' + activePoolId + '/tickets/' + btn.dataset.id + '/done', { method: 'DELETE' });
+      if (!res.ok) {
+        showToast(toast, 'Remove failed', true);
+        return;
+      }
+      await loadDoneTicketsPage();
+      showToast(toast, 'Removed ✓', false);
+    }
   });
 
   async function refreshAddHint() {
@@ -906,6 +957,8 @@
   document.getElementById('confirmDueDateBtn').addEventListener('click', () => submitAddTicket(true));
 
   const activeAlerts = new Map();
+  let bubbleDismissed = false;
+  let bubbleRenotifyTimer = null;
 
   function setBubbleVisible(visible) {
     const bubble = document.getElementById('bubble');
@@ -918,29 +971,64 @@
     }
   }
 
+  function scheduleBubbleRenotify() {
+    if (bubbleRenotifyTimer) return;
+    bubbleRenotifyTimer = setTimeout(() => {
+      bubbleRenotifyTimer = null;
+      bubbleDismissed = false;
+      renderBubble();
+    }, getBubbleRenotifySeconds() * 1000);
+  }
+
   function renderBubble() {
     if (activeAlerts.size === 0) {
       setBubbleVisible(false);
+      bubbleDismissed = false;
+      if (bubbleRenotifyTimer) {
+        clearTimeout(bubbleRenotifyTimer);
+        bubbleRenotifyTimer = null;
+      }
       return;
     }
     const entries = [...activeAlerts.values()];
     const chosen = entries.find(e => e.type === 'Overdue') || entries[0];
     document.getElementById('bubbleTitle').textContent = chosen.type === 'Overdue' ? 'Ticket overdue!' : 'Deadline approaching!';
-    document.getElementById('bubbleSubtitle').textContent = chosen.ticketKey + ' needs your attention';
+    const ticketKeyEl = document.getElementById('bubbleTicketKey');
+    ticketKeyEl.textContent = chosen.ticketKey;
+    ticketKeyEl.dataset.url = chosen.jiraUrl || '';
+    if (bubbleDismissed) {
+      scheduleBubbleRenotify();
+      return;
+    }
     setBubbleVisible(true);
   }
+
+  document.getElementById('bubbleDismissBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    bubbleDismissed = true;
+    setBubbleVisible(false);
+    scheduleBubbleRenotify();
+  });
+
+  document.getElementById('bubbleTicketKey').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const url = e.currentTarget.dataset.url;
+    if (url) window.open(url, '_blank');
+  });
 
   async function handleSocketEvent(evt, payload) {
     if (evt === 'TicketWarning' || evt === 'TicketOverdue') {
       let ticketKey = payload.ticketId;
+      let jiraUrl = null;
       try {
         const res = await api('/pools/' + activePoolId + '/tickets');
         const tickets = await res.json();
         const found = tickets.find(t => t.id === payload.ticketId);
-        if (found) ticketKey = found.jiraKey;
+        if (found) { ticketKey = found.jiraKey; jiraUrl = found.jiraUrl; }
       } catch (e) {}
-      activeAlerts.set(payload.ticketId, { type: evt === 'TicketOverdue' ? 'Overdue' : 'Warning', ticketKey });
+      activeAlerts.set(payload.ticketId, { type: evt === 'TicketOverdue' ? 'Overdue' : 'Warning', ticketKey, jiraUrl });
       renderBubble();
+      window.electronAPI?.showWindow();
     } else if (evt === 'TicketResolved' || evt === 'TicketDone') {
       activeAlerts.delete(payload.ticketId);
       renderBubble();
