@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Task Pool Manager — Notification Popup Mockup</title>
+<title>Deadline Buddy — Notification Popup Mockup</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Baloo+2:wght@600;700&display=swap');
 
@@ -91,6 +91,7 @@
   .field-input { width:100%; padding:7px 9px; border:2px solid #d8dbe0; border-radius:8px; font-family:'Baloo 2', sans-serif; font-size:13px; color:#1a1a2e; }
   textarea.field-input { resize:vertical; }
   .lead-row { display:flex; align-items:center; gap:8px; }
+  #timeFormatSegmented + .lead-row { margin-top:8px; }
   .lead-field { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; }
   .lead-field input { text-align:center; }
   .lead-field span { font-size:11px; color:#5a5f66; font-weight:600; }
@@ -99,6 +100,7 @@
   .segmented button { flex:1; padding:6px 0; border:none; background:#fff; font-family:'Baloo 2', sans-serif; font-weight:700; cursor:pointer; color:#1a1a2e; }
   .segmented button:not(:last-child) { border-right:2px solid #1a1a2e; }
   .segmented button.active { background:#1a1a2e; color:#fff; }
+  .segmented button:disabled { color:#aaa; cursor:not-allowed; }
   .save-btn {
     width:100%; margin-top:12px; padding:9px 0; background:#3fd6c4; border:2px solid #1a1a2e; border-radius:10px;
     font-family:'Baloo 2', sans-serif; font-weight:700; cursor:pointer; color:#1a1a2e; box-shadow: 2px 3px 0 rgba(26,26,46,0.15);
@@ -140,7 +142,7 @@
   }
 
   .bubble {
-    position: absolute; right: 0; bottom: 100%; margin-bottom: 12px;
+    position: absolute; right: 52px; bottom: 100%; margin-bottom: 12px;
     width: 210px; background: #ffffff; border: 2.5px solid #2b2f36; border-radius: 16px;
     padding: 10px 22px 10px 14px; box-shadow: 3px 4px 0 rgba(43,47,54,0.15);
     display: flex; align-items: flex-start; gap: 8px;
@@ -154,10 +156,10 @@
     100% { opacity: 1; transform: scale(1) translateY(0); }
   }
   .bubble::after, .bubble::before {
-    content: ''; position: absolute; right: 24px; width: 0; height: 0; border: 8px solid transparent; border-bottom: 0;
+    content: ''; position: absolute; right: 76px; width: 0; height: 0; border: 8px solid transparent; border-bottom: 0;
   }
   .bubble::after  { bottom: -8px;   border-top-color: #2b2f36; }
-  .bubble::before { bottom: -5.5px; border-top-color: #ffffff; border-width: 6.5px; right: 25.5px; }
+  .bubble::before { bottom: -5.5px; border-top-color: #ffffff; border-width: 6.5px; right: 77.5px; }
   .bubble-bell { font-size: 18px; animation: bellWiggle 0.55s ease-in-out infinite; }
   @keyframes bellWiggle { 0%,100%{transform:rotate(-10deg);} 50%{transform:rotate(10deg);} }
   .bubble-text { display: flex; flex-direction: column; }
@@ -217,6 +219,53 @@
       <label class="field-label">Re-show warning popup every (seconds, if dismissed)</label>
       <input class="field-input" type="number" min="3" id="bubbleRenotifySecondsInput" placeholder="10"/>
 
+      <label class="field-label">Voice notifications (speaks new warnings out loud)</label>
+      <div class="segmented" id="voiceNotificationsSegmented">
+        <button data-enabled="off" class="active">Off</button>
+        <button data-enabled="on">On</button>
+      </div>
+
+      <div id="voiceConfigSection" class="hidden">
+        <label class="field-label">Voice language</label>
+        <div class="segmented" id="voiceLanguageSegmented">
+          <button data-lang="vi" class="active">Tiếng Việt</button>
+          <button data-lang="en">English</button>
+          <button data-lang="ja">日本語</button>
+        </div>
+        <p class="hint" id="voiceLanguageHint"></p>
+
+        <label class="field-label">Voice provider</label>
+        <div class="segmented" id="voiceProviderSegmented">
+          <button data-provider="piper" class="active">Piper (local)</button>
+          <button data-provider="elevenlabs">ElevenLabs (cloud)</button>
+        </div>
+
+        <div id="piperVoiceFields">
+          <label class="field-label">Voice</label>
+          <select class="field-input" id="piperVoiceSelect">
+            <option value="vi_VN-vais1000-medium" data-lang="vi">Vais1000 (khuyên dùng)</option>
+            <option value="vi_VN-25hours_single-low" data-lang="vi">25hours (nhẹ)</option>
+            <option value="vi_VN-vivos-x_low" data-lang="vi">Vivos (nhiều giọng)</option>
+            <option value="en_US-lessac-medium" data-lang="en">Lessac (recommended)</option>
+          </select>
+          <button class="save-btn" id="piperPreviewBtn">Preview</button>
+        </div>
+
+        <div id="elevenLabsFields" class="hidden">
+          <label class="field-label">ElevenLabs API Key</label>
+          <input class="field-input" type="password" id="elevenLabsApiKeyInput" placeholder="Your ElevenLabs API key">
+
+          <label class="field-label">Voice ID</label>
+          <input class="field-input" type="text" id="elevenLabsVoiceIdInput" placeholder="JBFqnCBsd6RMkjVDRZzb">
+          <p class="hint">Leave blank to use the default sample voice (works on the free tier). Once you have a cloned voice, paste its Voice ID here.</p>
+
+          <button class="save-btn" id="elevenLabsTestBtn">Test connection</button>
+          <div class="toast" id="elevenLabsToast">Connected ✓</div>
+          <button class="save-btn" id="elevenLabsPreviewBtn">Preview</button>
+          <p class="hint">Click "Save changes" at the top of Settings to save this API key/Voice ID.</p>
+        </div>
+      </div>
+
       <label class="field-label">App Mode</label>
       <div class="segmented" id="appModeSegmented">
         <button data-mode="demo" class="active">Demo</button>
@@ -271,6 +320,9 @@
 
             <label class="field-label">API Token</label>
             <input class="field-input" type="password" id="jiraApiTokenInput" placeholder="Your Jira API token">
+
+            <button class="save-btn" id="connectJiraApiTokenBtn">Connect Jira</button>
+            <div class="toast" id="jiraApiTokenToast">Connected ✓</div>
           </div>
         </div>
       </div>
@@ -325,7 +377,7 @@
         <span class="bubble-bell">🔔</span>
         <div class="bubble-text">
           <strong id="bubbleTitle">Ticket overdue!</strong>
-          <span id="bubbleSubtitle"><span id="bubbleTicketKey" class="bubble-ticket-link"></span> needs your attention</span>
+          <span id="bubbleSubtitle"></span>
         </div>
         <button class="bubble-dismiss" id="bubbleDismissBtn" title="Dismiss">✕</button>
       </div>
@@ -447,6 +499,8 @@
   const workingEndInput = document.getElementById('workingEndInput');
   let currentWorkingHourStart = 480;
   let currentWorkingHourEnd = 1020;
+  let currentVoiceProvider = 'piper';
+  let currentVoiceLanguage = 'vi';
 
   function currentTimeFormat() {
     const activeBtn = document.querySelector('#timeFormatSegmented button.active');
@@ -527,6 +581,142 @@
     document.getElementById('bubbleRenotifySecondsInput').value = getBubbleRenotifySeconds();
   })();
 
+  function isVoiceNotificationsEnabled() {
+    return localStorage.getItem('voiceNotificationsEnabled') === 'on';
+  }
+
+  document.querySelectorAll('#voiceNotificationsSegmented button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#voiceNotificationsSegmented button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      localStorage.setItem('voiceNotificationsEnabled', btn.dataset.enabled);
+      checkSettingsDirty();
+    });
+  });
+  function updateVoiceConfigVisibility() {
+    document.getElementById('voiceConfigSection').classList.toggle('hidden', !isVoiceNotificationsEnabled());
+  }
+
+  document.querySelectorAll('#voiceNotificationsSegmented button').forEach(btn => {
+    btn.addEventListener('click', updateVoiceConfigVisibility);
+  });
+
+  (function restoreVoiceNotifications() {
+    const enabled = isVoiceNotificationsEnabled() ? 'on' : 'off';
+    document.querySelectorAll('#voiceNotificationsSegmented button').forEach(b => b.classList.toggle('active', b.dataset.enabled === enabled));
+    updateVoiceConfigVisibility();
+  })();
+
+  const PIPER_DEFAULT_VOICE_BY_LANG = { vi: 'vi_VN-vais1000-medium', en: 'en_US-lessac-medium' };
+  const PREVIEW_TEXT_BY_LANG = {
+    vi: { piper: 'Đây là giọng đọc thử của Piper', elevenlabs: 'Đây là giọng đọc thử của Eleven Labs' },
+    en: { piper: 'This is a Piper voice preview', elevenlabs: 'This is an ElevenLabs voice preview' },
+    ja: { piper: 'これはPiperの音声プレビューです', elevenlabs: 'これはElevenLabsの音声プレビューです' },
+  };
+
+  function getSelectedPiperVoiceId() {
+    return localStorage.getItem('selectedPiperVoiceId_' + currentVoiceLanguage) ||
+      PIPER_DEFAULT_VOICE_BY_LANG[currentVoiceLanguage] || 'vi_VN-vais1000-medium';
+  }
+
+  document.getElementById('piperVoiceSelect').addEventListener('change', (e) => {
+    localStorage.setItem('selectedPiperVoiceId_' + currentVoiceLanguage, e.target.value);
+    checkSettingsDirty();
+  });
+
+  function updatePiperVoiceOptionsForLanguage() {
+    const select = document.getElementById('piperVoiceSelect');
+    Array.from(select.options).forEach(opt => {
+      opt.hidden = opt.dataset.lang !== currentVoiceLanguage;
+    });
+    select.value = getSelectedPiperVoiceId();
+  }
+  updatePiperVoiceOptionsForLanguage();
+
+  function updateVoiceProviderVisibility() {
+    const active = document.querySelector('#voiceProviderSegmented button.active')?.dataset.provider || 'piper';
+    document.getElementById('piperVoiceFields').classList.toggle('hidden', active !== 'piper');
+    document.getElementById('elevenLabsFields').classList.toggle('hidden', active !== 'elevenlabs');
+  }
+
+  function updateVoiceLanguageConstraints() {
+    const active = document.querySelector('#voiceProviderSegmented button.active')?.dataset.provider || 'piper';
+    const isPiper = active === 'piper';
+    const jaBtn = document.querySelector('#voiceLanguageSegmented button[data-lang="ja"]');
+    jaBtn.disabled = isPiper;
+    document.getElementById('voiceLanguageHint').textContent =
+      isPiper ? "Piper doesn't support Japanese — switch to ElevenLabs to use this language." : '';
+    if (isPiper && currentVoiceLanguage === 'ja') {
+      currentVoiceLanguage = 'vi';
+      document.querySelectorAll('#voiceLanguageSegmented button').forEach(b => b.classList.toggle('active', b.dataset.lang === 'vi'));
+      updatePiperVoiceOptionsForLanguage();
+      showToast(document.getElementById('settingsToast'), "Piper doesn't support Japanese, switched back to Vietnamese", true);
+    }
+  }
+
+  document.querySelectorAll('#voiceLanguageSegmented button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.disabled) return;
+      document.querySelectorAll('#voiceLanguageSegmented button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentVoiceLanguage = btn.dataset.lang;
+      updatePiperVoiceOptionsForLanguage();
+      checkSettingsDirty();
+    });
+  });
+
+  document.querySelectorAll('#voiceProviderSegmented button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#voiceProviderSegmented button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      updateVoiceProviderVisibility();
+      updateVoiceLanguageConstraints();
+      checkSettingsDirty();
+    });
+  });
+
+  document.getElementById('piperPreviewBtn').addEventListener('click', async () => {
+    if (!window.electronAPI) return;
+    const text = (PREVIEW_TEXT_BY_LANG[currentVoiceLanguage] || PREVIEW_TEXT_BY_LANG.vi).piper;
+    const url = await window.electronAPI.speak(text, getSelectedPiperVoiceId());
+    if (url) new Audio(url).play();
+  });
+
+  document.getElementById('elevenLabsTestBtn').addEventListener('click', async () => {
+    const toast = document.getElementById('elevenLabsToast');
+    const apiKey = document.getElementById('elevenLabsApiKeyInput').value.trim();
+    if (!apiKey) {
+      showToast(toast, 'Enter an API key first', true);
+      return;
+    }
+    const res = await api('/integrations/elevenlabs/test', {
+      method: 'POST',
+      body: JSON.stringify({ apiKey }),
+    });
+    if (!res.ok) {
+      const failed = await res.json().catch(() => ({}));
+      showToast(toast, failed.message || 'Connection failed', true);
+      return;
+    }
+    showToast(toast, 'Connected ✓', false);
+  });
+
+  document.getElementById('elevenLabsPreviewBtn').addEventListener('click', async () => {
+    const toast = document.getElementById('elevenLabsToast');
+    const previewText = (PREVIEW_TEXT_BY_LANG[currentVoiceLanguage] || PREVIEW_TEXT_BY_LANG.vi).elevenlabs;
+    const res = await api('/integrations/elevenlabs/speak', {
+      method: 'POST',
+      body: JSON.stringify({ text: previewText }),
+    });
+    if (!res.ok) {
+      const failed = await res.json().catch(() => ({}));
+      showToast(toast, failed.message || 'Preview failed', true);
+      return;
+    }
+    const { audioUrl } = await res.json();
+    if (audioUrl) new Audio(audioUrl).play();
+  });
+
   function updateJiraSectionVisibility() {
     const activeModeBtn = document.querySelector('#appModeSegmented button.active');
     const appMode = activeModeBtn ? activeModeBtn.dataset.mode : 'demo';
@@ -562,6 +752,13 @@
       jiraSiteUrl: document.getElementById('jiraSiteUrlInput').value,
       jiraEmail: document.getElementById('jiraEmailInput').value,
       jiraApiToken: document.getElementById('jiraApiTokenInput').value,
+      bubbleRenotifySeconds: document.getElementById('bubbleRenotifySecondsInput').value,
+      voiceNotificationsEnabled: document.querySelector('#voiceNotificationsSegmented button.active')?.dataset.enabled,
+      voiceProvider: document.querySelector('#voiceProviderSegmented button.active')?.dataset.provider,
+      voiceLanguage: document.querySelector('#voiceLanguageSegmented button.active')?.dataset.lang,
+      piperVoiceId: document.getElementById('piperVoiceSelect').value,
+      elevenLabsApiKey: document.getElementById('elevenLabsApiKeyInput').value,
+      elevenLabsVoiceId: document.getElementById('elevenLabsVoiceIdInput').value,
     };
   }
 
@@ -580,6 +777,7 @@
   [
     'capacityInput', 'leadDaysInput', 'leadHoursInput', 'leadMinutesInput', 'workingStartInput', 'workingEndInput',
     'jiraPollIntervalInput', 'jiraClientIdInput', 'jiraClientSecretInput', 'jiraSiteUrlInput', 'jiraEmailInput', 'jiraApiTokenInput',
+    'elevenLabsApiKeyInput', 'elevenLabsVoiceIdInput',
   ].forEach(id => {
     document.getElementById(id).addEventListener('input', checkSettingsDirty);
   });
@@ -641,6 +839,12 @@
   async function bootstrap() {
     await ensureActivePool();
     listenForAppEvents();
+    try {
+      const res = await api('/users/me/settings');
+      const settings = await res.json();
+      currentVoiceProvider = settings.voiceProvider;
+      currentVoiceLanguage = settings.voiceLanguage;
+    } catch (e) {}
   }
   bootstrap();
 
@@ -665,6 +869,17 @@
     renderWorkingTimeInputs();
 
     document.getElementById('jiraPollIntervalInput').value = settings.jiraPollIntervalSeconds;
+
+    currentVoiceProvider = settings.voiceProvider;
+    document.querySelectorAll('#voiceProviderSegmented button').forEach(b => b.classList.toggle('active', b.dataset.provider === settings.voiceProvider));
+    updateVoiceProviderVisibility();
+    currentVoiceLanguage = settings.voiceLanguage;
+    document.querySelectorAll('#voiceLanguageSegmented button').forEach(b => b.classList.toggle('active', b.dataset.lang === settings.voiceLanguage));
+    updateVoiceLanguageConstraints();
+    updatePiperVoiceOptionsForLanguage();
+    const elevenLabsConfigRes = await api('/integrations/elevenlabs/config');
+    const elevenLabsConfig = await elevenLabsConfigRes.json();
+    document.getElementById('elevenLabsVoiceIdInput').value = elevenLabsConfig.voiceId || '';
 
     jiraEditMode = null;
     jiraAuthMethodTab = null;
@@ -693,12 +908,14 @@
       return;
     }
     const jiraPollIntervalSeconds = Number(document.getElementById('jiraPollIntervalInput').value);
+    const voiceProvider = document.querySelector('#voiceProviderSegmented button.active')?.dataset.provider || 'piper';
+    const voiceLanguage = document.querySelector('#voiceLanguageSegmented button.active')?.dataset.lang || 'vi';
 
     const requests = [
       api('/pools/' + activePoolId, { method: 'PATCH', body: JSON.stringify({ capacity }) }),
       api('/users/me/settings', {
         method: 'PATCH',
-        body: JSON.stringify({ defaultWarningLeadMinutes: leadMinutes, appMode, workingHourStart, workingHourEnd, timeFormat, jiraPollIntervalSeconds }),
+        body: JSON.stringify({ defaultWarningLeadMinutes: leadMinutes, appMode, workingHourStart, workingHourEnd, timeFormat, jiraPollIntervalSeconds, voiceProvider, voiceLanguage }),
       }),
     ];
 
@@ -717,11 +934,18 @@
         requests.push(api('/integrations/jira/api-token', { method: 'PUT', body: JSON.stringify({ siteUrl, email, apiToken }) }));
       }
     }
+    if (voiceProvider === 'elevenlabs') {
+      const elevenLabsApiKey = document.getElementById('elevenLabsApiKeyInput').value.trim();
+      const elevenLabsVoiceId = document.getElementById('elevenLabsVoiceIdInput').value.trim();
+      if (elevenLabsApiKey) {
+        requests.push(api('/integrations/elevenlabs/config', { method: 'PUT', body: JSON.stringify({ apiKey: elevenLabsApiKey, voiceId: elevenLabsVoiceId }) }));
+      }
+    }
 
-    const [poolRes, settingsRes, ...jiraResponses] = await Promise.all(requests);
-    const failedJiraRes = jiraResponses.find((r) => !r.ok);
-    if (!poolRes.ok || !settingsRes.ok || failedJiraRes) {
-      const failedRes = !poolRes.ok ? poolRes : !settingsRes.ok ? settingsRes : failedJiraRes;
+    const [poolRes, settingsRes, ...extraResponses] = await Promise.all(requests);
+    const failedExtraRes = extraResponses.find((r) => !r.ok);
+    if (!poolRes.ok || !settingsRes.ok || failedExtraRes) {
+      const failedRes = !poolRes.ok ? poolRes : !settingsRes.ok ? settingsRes : failedExtraRes;
       const failed = await failedRes.json().catch(() => ({}));
       showToast(toast, failed.message || failed.error || 'Save failed', true);
       return;
@@ -729,8 +953,11 @@
     const settings = await settingsRes.json();
     currentWorkingHourStart = settings.workingHourStart;
     currentWorkingHourEnd = settings.workingHourEnd;
+    currentVoiceProvider = settings.voiceProvider;
+    currentVoiceLanguage = settings.voiceLanguage;
     document.getElementById('jiraClientSecretInput').value = '';
     document.getElementById('jiraApiTokenInput').value = '';
+    document.getElementById('elevenLabsApiKeyInput').value = '';
     await refreshPools();
     await loadJiraPanel();
     showToast(toast, 'Saved ✓', false);
@@ -812,6 +1039,27 @@
     if (!res.ok) return;
     const { authorizeUrl } = await res.json();
     window.open(authorizeUrl, '_blank');
+  });
+
+  document.getElementById('connectJiraApiTokenBtn').addEventListener('click', async () => {
+    const toast = document.getElementById('jiraApiTokenToast');
+    const siteUrl = document.getElementById('jiraSiteUrlInput').value.trim();
+    const email = document.getElementById('jiraEmailInput').value.trim();
+    const apiToken = document.getElementById('jiraApiTokenInput').value.trim();
+    if (!siteUrl || !email || !apiToken) {
+      showToast(toast, 'Fill in Site URL, Email and API Token first', true);
+      return;
+    }
+    const res = await api('/integrations/jira/api-token', { method: 'PUT', body: JSON.stringify({ siteUrl, email, apiToken }) });
+    if (!res.ok) {
+      const failed = await res.json().catch(() => ({}));
+      showToast(toast, failed.message || 'Connection failed', true);
+      return;
+    }
+    document.getElementById('jiraApiTokenInput').value = '';
+    await loadJiraPanel();
+    markSettingsClean();
+    showToast(toast, 'Connected ✓', false);
   });
 
   function escapeHtml(str) {
@@ -980,6 +1228,65 @@
     }, getBubbleRenotifySeconds() * 1000);
   }
 
+  const ALERT_MESSAGE_TEMPLATES = {
+    vi: { overdue: (keys) => keys + ' đã quá hạn', warning: (keys) => keys + ' sắp tới hạn' },
+    en: { overdue: (keys) => keys + ' is overdue', warning: (keys) => keys + ' is approaching the deadline' },
+    ja: { overdue: (keys) => keys + 'の期限が過ぎました', warning: (keys) => keys + 'の期限が近づいています' },
+  };
+
+  const VOICE_SPEAK_DEBOUNCE_MS = 800;
+  let voiceSpeakTimer = null;
+  let activeVoiceAudio = null;
+
+  function playVoiceAudio(url) {
+    if (!url) return;
+    if (activeVoiceAudio) {
+      activeVoiceAudio.pause();
+    }
+    activeVoiceAudio = new Audio(url);
+    activeVoiceAudio.play();
+  }
+
+  function speakActiveAlertsNow(entries) {
+    if (!isVoiceNotificationsEnabled() || entries.length === 0) return;
+    const templates = ALERT_MESSAGE_TEMPLATES[currentVoiceLanguage] || ALERT_MESSAGE_TEMPLATES.vi;
+    const message = entries
+      .map(e => e.type === 'Overdue' ? templates.overdue(e.ticketKey) : templates.warning(e.ticketKey))
+      .join('. ');
+    const speakWithPiper = () => {
+      if (window.electronAPI) {
+        window.electronAPI.speak(message, getSelectedPiperVoiceId()).then(playVoiceAudio);
+      }
+    };
+    if (currentVoiceProvider === 'elevenlabs') {
+      api('/integrations/elevenlabs/speak', { method: 'POST', body: JSON.stringify({ text: message }) })
+        .then(async res => {
+          if (res.ok) return res.json();
+          const failed = await res.json().catch(() => ({}));
+          if (failed.error === 'ElevenLabsQuotaExceeded') {
+            console.error('ElevenLabs is out of TTS credits — falling back to Piper for this alert');
+            speakWithPiper();
+          }
+          return null;
+        })
+        .then(data => { if (data && data.audioUrl) playVoiceAudio(data.audioUrl); })
+        .catch(() => {});
+    } else {
+      speakWithPiper();
+    }
+  }
+
+  // Debounced: when several tickets alert within the same burst (e.g. one deadlineScanner
+  // tick crossing multiple tickets into Warning/Overdue at once), coalesce them into a single
+  // utterance instead of firing overlapping speech per ticket.
+  function speakActiveAlerts() {
+    if (voiceSpeakTimer) clearTimeout(voiceSpeakTimer);
+    voiceSpeakTimer = setTimeout(() => {
+      voiceSpeakTimer = null;
+      speakActiveAlertsNow([...activeAlerts.values()]);
+    }, VOICE_SPEAK_DEBOUNCE_MS);
+  }
+
   function renderBubble() {
     if (activeAlerts.size === 0) {
       setBubbleVisible(false);
@@ -991,16 +1298,19 @@
       return;
     }
     const entries = [...activeAlerts.values()];
-    const chosen = entries.find(e => e.type === 'Overdue') || entries[0];
-    document.getElementById('bubbleTitle').textContent = chosen.type === 'Overdue' ? 'Ticket overdue!' : 'Deadline approaching!';
-    const ticketKeyEl = document.getElementById('bubbleTicketKey');
-    ticketKeyEl.textContent = chosen.ticketKey;
-    ticketKeyEl.dataset.url = chosen.jiraUrl || '';
+    const hasOverdue = entries.some(e => e.type === 'Overdue');
+    document.getElementById('bubbleTitle').textContent = hasOverdue ? 'Ticket overdue!' : 'Deadline approaching!';
+    const linksHtml = entries
+      .map(e => '<span class="bubble-ticket-link" data-url="' + (e.jiraUrl || '') + '">' + escapeHtml(e.ticketKey) + '</span>')
+      .join(', ');
+    document.getElementById('bubbleSubtitle').innerHTML =
+      linksHtml + (entries.length > 1 ? ' need your attention' : ' needs your attention');
     if (bubbleDismissed) {
       scheduleBubbleRenotify();
       return;
     }
     setBubbleVisible(true);
+    speakActiveAlerts();
   }
 
   document.getElementById('bubbleDismissBtn').addEventListener('click', (e) => {
@@ -1010,9 +1320,11 @@
     scheduleBubbleRenotify();
   });
 
-  document.getElementById('bubbleTicketKey').addEventListener('click', (e) => {
+  document.getElementById('bubbleSubtitle').addEventListener('click', (e) => {
+    const link = e.target.closest('.bubble-ticket-link');
+    if (!link) return;
     e.stopPropagation();
-    const url = e.currentTarget.dataset.url;
+    const url = link.dataset.url;
     if (url) window.open(url, '_blank');
   });
 

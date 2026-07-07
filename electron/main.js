@@ -1,6 +1,8 @@
 const { app, BrowserWindow, ipcMain, Menu, nativeImage, screen, shell, Tray } = require('electron');
+const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 let mainWindow = null;
@@ -102,6 +104,55 @@ ipcMain.on('show-window', (event) => {
   win?.show();
 });
 
+function piperResourcesDir() {
+  return app.isPackaged ? path.join(process.resourcesPath, 'piper') : path.join(__dirname, '..', 'resources', 'piper');
+}
+
+function piperBinaryPath() {
+  const platformDir = process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'win' : 'linux';
+  const binaryName = process.platform === 'win32' ? 'piper.exe' : 'piper';
+  if (app.isPackaged) return path.join(piperResourcesDir(), binaryName);
+  return path.join(__dirname, '..', 'resources', 'piper', platformDir, binaryName);
+}
+
+const KNOWN_VOICE_IDS = ['vi_VN-vais1000-medium', 'vi_VN-25hours_single-low', 'vi_VN-vivos-x_low', 'en_US-lessac-medium'];
+const DEFAULT_VOICE_ID = 'vi_VN-vais1000-medium';
+
+function piperVoicePath(voiceId) {
+  const safeVoiceId = KNOWN_VOICE_IDS.includes(voiceId) ? voiceId : DEFAULT_VOICE_ID;
+  return path.join(piperResourcesDir(), 'voices', `${safeVoiceId}.onnx`);
+}
+
+async function speakText(text, voiceId) {
+  const binaryPath = piperBinaryPath();
+  const voicePath = piperVoicePath(voiceId);
+  if (!fs.existsSync(binaryPath) || !fs.existsSync(voicePath)) {
+    console.error('speakText: piper binary or voice model not found', { binaryPath, voicePath });
+    return null;
+  }
+
+  const wavPath = path.join(os.tmpdir(), `piper-${crypto.randomUUID()}.wav`);
+  try {
+    await new Promise((resolve, reject) => {
+      const child = spawn(binaryPath, ['--model', voicePath, '--output_file', wavPath]);
+      child.on('error', reject);
+      child.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`piper exited with code ${code}`))));
+      child.stdin.write(text);
+      child.stdin.end();
+    });
+
+    const wavBuffer = fs.readFileSync(wavPath);
+    return `data:audio/wav;base64,${wavBuffer.toString('base64')}`;
+  } catch (err) {
+    console.error('speakText failed', err);
+    return null;
+  } finally {
+    fs.unlink(wavPath, () => {});
+  }
+}
+
+ipcMain.handle('speak-text', (_event, text, voiceId) => speakText(text, voiceId));
+
 function toggleWindowVisibility() {
   if (!mainWindow) return;
   if (mainWindow.isVisible()) {
@@ -115,7 +166,7 @@ function createTray() {
 
   const icon = nativeImage.createFromPath(path.join(__dirname, '..', 'build', 'tray-icon.png'));
   tray = new Tray(icon);
-  tray.setToolTip('Task Pool Manager');
+  tray.setToolTip('Deadline Buddy');
   tray.on('click', toggleWindowVisibility);
   tray.setContextMenu(
     Menu.buildFromTemplate([

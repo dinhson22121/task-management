@@ -5,7 +5,7 @@ datasource db {
 
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "darwin", "darwin-arm64", "windows"]
+  binaryTargets = ["native", "darwin", "darwin-arm64", "windows", "debian-openssl-3.0.x", "rhel-openssl-3.0.x"]
 }
 
 model User {
@@ -18,6 +18,10 @@ model User {
   workingHourEnd              Int      @default(1020)
   timeFormat                  String   @default("24h")
   jiraPollIntervalSeconds     Int      @default(300)
+  voiceProvider               String   @default("piper")
+  voiceLanguage               String   @default("vi")
+  elevenLabsApiKeyEncrypted   Bytes?
+  elevenLabsVoiceId           String?
   createdAt                   DateTime @default(now())
   pools                       Pool[]
   integrationConnections      IntegrationConnection[]

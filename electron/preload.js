@@ -5,4 +5,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   hideWindow: () => ipcRenderer.send('hide-window'),
   showWindow: () => ipcRenderer.send('show-window'),
   onAppEvent: (callback) => ipcRenderer.on('app-event', (_event, { type, payload }) => callback(type, payload)),
+  speak: (text, voiceId) => ipcRenderer.invoke('speak-text', text, voiceId),
 });

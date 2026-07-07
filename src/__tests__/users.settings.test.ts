@@ -93,4 +93,48 @@ describe('user settings', () => {
     const res = await request(base()).patch('/users/me/settings').send({ jiraPollIntervalSeconds: 14 });
     expect(res.status).toBe(400);
   });
+
+  it('defaults voiceProvider to piper', async () => {
+    const res = await request(base()).get('/users/me/settings');
+    expect(res.body.voiceProvider).toBe('piper');
+  });
+
+  it('accepts elevenlabs as voiceProvider and round-trips it', async () => {
+    const patchRes = await request(base()).patch('/users/me/settings').send({ voiceProvider: 'elevenlabs' });
+    expect(patchRes.status).toBe(200);
+    expect(patchRes.body.voiceProvider).toBe('elevenlabs');
+
+    const getRes = await request(base()).get('/users/me/settings');
+    expect(getRes.body.voiceProvider).toBe('elevenlabs');
+
+    await request(base()).patch('/users/me/settings').send({ voiceProvider: 'piper' });
+  });
+
+  it('rejects an invalid voiceProvider', async () => {
+    const res = await request(base()).patch('/users/me/settings').send({ voiceProvider: 'siri' });
+    expect(res.status).toBe(400);
+  });
+
+  it('defaults voiceLanguage to vi', async () => {
+    const res = await request(base()).get('/users/me/settings');
+    expect(res.body.voiceLanguage).toBe('vi');
+  });
+
+  it('accepts en and ja as voiceLanguage and round-trips them', async () => {
+    for (const lang of ['en', 'ja']) {
+      const patchRes = await request(base()).patch('/users/me/settings').send({ voiceLanguage: lang });
+      expect(patchRes.status).toBe(200);
+      expect(patchRes.body.voiceLanguage).toBe(lang);
+
+      const getRes = await request(base()).get('/users/me/settings');
+      expect(getRes.body.voiceLanguage).toBe(lang);
+    }
+
+    await request(base()).patch('/users/me/settings').send({ voiceLanguage: 'vi' });
+  });
+
+  it('rejects an invalid voiceLanguage', async () => {
+    const res = await request(base()).patch('/users/me/settings').send({ voiceLanguage: 'fr' });
+    expect(res.status).toBe(400);
+  });
 });

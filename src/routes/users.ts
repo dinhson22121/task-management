@@ -16,6 +16,8 @@ function serializeSettings(user: {
   workingHourEnd: number;
   timeFormat: string;
   jiraPollIntervalSeconds: number;
+  voiceProvider: string;
+  voiceLanguage: string;
 }) {
   return {
     defaultWarningLeadMinutes: user.defaultWarningLeadMinutes,
@@ -24,6 +26,8 @@ function serializeSettings(user: {
     workingHourEnd: user.workingHourEnd,
     timeFormat: user.timeFormat,
     jiraPollIntervalSeconds: user.jiraPollIntervalSeconds,
+    voiceProvider: user.voiceProvider,
+    voiceLanguage: user.voiceLanguage,
   };
 }
 
@@ -45,8 +49,16 @@ usersRouter.get(
 usersRouter.patch(
   '/users/me/settings',
   asyncHandler(async (req: AuthedRequest, res) => {
-    const { defaultWarningLeadMinutes, appMode, workingHourStart, workingHourEnd, timeFormat, jiraPollIntervalSeconds } =
-      req.body ?? {};
+    const {
+      defaultWarningLeadMinutes,
+      appMode,
+      workingHourStart,
+      workingHourEnd,
+      timeFormat,
+      jiraPollIntervalSeconds,
+      voiceProvider,
+      voiceLanguage,
+    } = req.body ?? {};
     const data: {
       defaultWarningLeadMinutes?: number;
       appMode?: string;
@@ -54,6 +66,8 @@ usersRouter.patch(
       workingHourEnd?: number;
       timeFormat?: string;
       jiraPollIntervalSeconds?: number;
+      voiceProvider?: string;
+      voiceLanguage?: string;
     } = {};
 
     if (defaultWarningLeadMinutes !== undefined) {
@@ -85,6 +99,20 @@ usersRouter.patch(
         throw new ValidationError(`jiraPollIntervalSeconds must be an integer >= ${MIN_JIRA_POLL_INTERVAL_SECONDS}`);
       }
       data.jiraPollIntervalSeconds = jiraPollIntervalSeconds;
+    }
+
+    if (voiceProvider !== undefined) {
+      if (voiceProvider !== 'piper' && voiceProvider !== 'elevenlabs') {
+        throw new ValidationError('voiceProvider must be "piper" or "elevenlabs"');
+      }
+      data.voiceProvider = voiceProvider;
+    }
+
+    if (voiceLanguage !== undefined) {
+      if (voiceLanguage !== 'vi' && voiceLanguage !== 'en' && voiceLanguage !== 'ja') {
+        throw new ValidationError('voiceLanguage must be "vi", "en" or "ja"');
+      }
+      data.voiceLanguage = voiceLanguage;
     }
 
     const user = await prisma.user.update({ where: { id: req.user!.id }, data });

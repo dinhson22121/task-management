@@ -68,3 +68,21 @@ export class JiraApiTokenInvalidError extends AppError {
     super('JiraApiTokenInvalid', 401, { message: 'Could not verify this Jira email/API token — check your credentials.' });
   }
 }
+
+export class ElevenLabsApiKeyInvalidError extends AppError {
+  constructor() {
+    super('ElevenLabsApiKeyInvalid', 401, { message: 'Could not verify this ElevenLabs API key — check your credentials.' });
+  }
+}
+
+export class ElevenLabsNotConfiguredError extends AppError {
+  constructor() {
+    super('ElevenLabsNotConfigured', 400, { message: 'Save your ElevenLabs API key in Settings first.' });
+  }
+}
+
+export class ElevenLabsQuotaExceededError extends AppError {
+  constructor() {
+    super('ElevenLabsQuotaExceeded', 402, { message: 'Your ElevenLabs account is out of TTS credits.' });
+  }
+}

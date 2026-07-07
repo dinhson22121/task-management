@@ -2,7 +2,11 @@
   "name": "task-pool-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "Task Pool Manager — Electron desktop app (embedded Express + Prisma/SQLite backend)",
+  "description": "Deadline Buddy — Electron desktop app (embedded Express + Prisma/SQLite backend)",
+  "author": {
+    "name": "Son Ngo",
+    "email": "dinhson22121997@gmail.com"
+  },
   "main": "electron/main.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
@@ -13,16 +17,18 @@
     "test": "jest --runInBand",
     "electron:dev": "npm run build && electron .",
     "dist:mac:dir": "npm run build && electron-builder --mac dir",
-    "dist:mac": "npm run build && electron-builder --mac dmg zip",
+    "dist:mac": "npm run build && electron-builder --mac dmg zip --x64 --arm64",
     "dist:win": "npm run build && electron-builder --win nsis",
+    "dist:linux": "npm run build && electron-builder --linux deb rpm",
+    "setup:piper": "bash scripts/download-piper.sh",
     "postinstall": "prisma generate"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "build": {
-    "appId": "com.taskpoolmanager.app",
-    "productName": "Task Pool Manager",
+    "appId": "com.deadlinebuddy.app",
+    "productName": "Deadline Buddy",
     "directories": {
       "output": "release"
     },
@@ -48,6 +54,10 @@
       {
         "from": "node_modules/.prisma",
         "to": "app/node_modules/.prisma"
+      },
+      {
+        "from": "resources/piper/voices",
+        "to": "piper/voices"
       }
     ],
     "mac": {
@@ -56,18 +66,44 @@
         "zip"
       ],
       "category": "public.app-category.productivity",
-      "icon": "build/icon.icns"
+      "icon": "build/icon.icns",
+      "extraResources": [
+        {
+          "from": "resources/piper/mac",
+          "to": "piper"
+        }
+      ]
     },
     "win": {
       "target": [
         "nsis"
       ],
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "extraResources": [
+        {
+          "from": "resources/piper/win",
+          "to": "piper"
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "target": [
+        "deb",
+        "rpm"
+      ],
+      "icon": "build/icon.png",
+      "category": "Office",
+      "extraResources": [
+        {
+          "from": "resources/piper/linux",
+          "to": "piper"
+        }
+      ]
     }
   },
   "dependencies": {

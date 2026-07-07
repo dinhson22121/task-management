@@ -86,4 +86,34 @@ describe('deadline scanner', () => {
     const updated = await ctx.prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
     expect(updated.status).toBe('Normal');
   });
+
+  it('demotes a Warning ticket back to Normal once the lead time no longer covers it', async () => {
+    const pool = await ctx.prisma.pool.create({
+      data: { ownerId: ctx.userId, name: 'Demote Pool', capacity: 5 },
+    });
+    const ticket = await ctx.prisma.ticket.create({
+      data: {
+        poolId: pool.id,
+        jiraKey: 'ENG-12',
+        jiraUrl: 'https://example.atlassian.net/browse/ENG-12',
+        title: 'Warning ticket',
+        deadline: new Date(Date.now() + 2 * 60 * 60 * 1000),
+        status: 'Warning',
+        warningLeadMinutes: 180,
+      },
+    });
+
+    const resolvedEvents: Array<{ ticketId: string }> = [];
+    const onResolved = (payload: { ticketId: string }) => resolvedEvents.push(payload);
+    ctx.appEvents.on('TicketResolved', onResolved);
+
+    await ctx.prisma.ticket.update({ where: { id: ticket.id }, data: { warningLeadMinutes: 30 } });
+    await ctx.runDeadlineScan();
+
+    ctx.appEvents.off('TicketResolved', onResolved);
+
+    expect(resolvedEvents.some((e) => e.ticketId === ticket.id)).toBe(true);
+    const updated = await ctx.prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+    expect(updated.status).toBe('Normal');
+  });
 });

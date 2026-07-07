@@ -32,7 +32,7 @@ export async function startServer(): Promise<StartedServer> {
 
 if (require.main === module) {
   startServer()
-    .then(({ port }) => console.log(`Task Pool Manager backend listening on :${port}`))
+    .then(({ port }) => console.log(`Deadline Buddy backend listening on :${port}`))
     .catch((err) => {
       console.error(err);
       process.exit(1);

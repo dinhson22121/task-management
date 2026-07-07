@@ -6,3 +6,5 @@ dist/
 prisma/dev.db*
 .DS_Store
 release/
+resources/piper/
+.voice-samples/

@@ -66,6 +66,21 @@ async function ensureTicketSoftRemoveColumns(): Promise<void> {
   }
 }
 
+async function ensureUserVoiceProviderColumns(): Promise<void> {
+  if (!(await columnExists('User', 'voiceProvider'))) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN "voiceProvider" TEXT NOT NULL DEFAULT 'piper'`);
+  }
+  if (!(await columnExists('User', 'elevenLabsApiKeyEncrypted'))) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN "elevenLabsApiKeyEncrypted" BLOB`);
+  }
+  if (!(await columnExists('User', 'elevenLabsVoiceId'))) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN "elevenLabsVoiceId" TEXT`);
+  }
+  if (!(await columnExists('User', 'voiceLanguage'))) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN "voiceLanguage" TEXT NOT NULL DEFAULT 'vi'`);
+  }
+}
+
 async function ensureIntegrationConnectionAuthMethodColumns(): Promise<void> {
   if (!(await columnExists('IntegrationConnection', 'authMethod'))) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "IntegrationConnection" ADD COLUMN "authMethod" TEXT NOT NULL DEFAULT 'oauth'`);
@@ -142,4 +157,5 @@ export async function ensureSchema(): Promise<void> {
   await ensureTicketDeadlineNullableAndJiraStatus();
   await ensureIntegrationConnectionAuthMethodColumns();
   await ensureTicketSoftRemoveColumns();
+  await ensureUserVoiceProviderColumns();
 }

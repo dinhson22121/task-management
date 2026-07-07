@@ -1,8 +1,15 @@
 import { Router } from 'express';
 import { env } from '../env';
 import { asyncHandler } from '../lib/asyncHandler';
-import { JiraApiTokenInvalidError, ValidationError } from '../lib/httpError';
-import { encrypt } from '../lib/tokenCrypto';
+import {
+  AppError,
+  ElevenLabsApiKeyInvalidError,
+  ElevenLabsNotConfiguredError,
+  ElevenLabsQuotaExceededError,
+  JiraApiTokenInvalidError,
+  ValidationError,
+} from '../lib/httpError';
+import { decrypt, encrypt } from '../lib/tokenCrypto';
 import { attachLocalUser, AuthedRequest } from '../middleware/localUser';
 import { prisma } from '../prismaClient';
 import { getJiraConfig, saveJiraConfig } from '../services/jiraConfigService';
@@ -10,6 +17,8 @@ import { getJiraPollStatus } from '../services/jiraPollScanner';
 import { buildAuthorizeUrl, consumeState, exchangeCodeForTokens, TokenExchangeResult } from '../services/oauthService';
 import { appEvents } from '../lib/appEvents';
 import { OAuthProviderKind } from '../types';
+
+const DEFAULT_ELEVENLABS_VOICE_ID = 'JBFqnCBsd6RMkjVDRZzb';
 
 export const integrationsRouter = Router();
 
@@ -189,5 +198,93 @@ integrationsRouter.put(
 
     appEvents.emit('IntegrationConnected', { provider: 'jira' });
     res.json({ connected: true, provider: 'jira' });
+  }),
+);
+
+integrationsRouter.get(
+  '/integrations/elevenlabs/config',
+  attachLocalUser,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id } });
+    res.json({
+      configured: !!user.elevenLabsApiKeyEncrypted,
+      voiceId: user.elevenLabsVoiceId || DEFAULT_ELEVENLABS_VOICE_ID,
+    });
+  }),
+);
+
+integrationsRouter.put(
+  '/integrations/elevenlabs/config',
+  attachLocalUser,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const apiKey = String(req.body?.apiKey ?? '').trim();
+    const voiceId = String(req.body?.voiceId ?? '').trim();
+    if (!apiKey) throw new ValidationError('apiKey is required');
+
+    await prisma.user.update({
+      where: { id: req.user!.id },
+      data: {
+        elevenLabsApiKeyEncrypted: encrypt(apiKey),
+        elevenLabsVoiceId: voiceId || DEFAULT_ELEVENLABS_VOICE_ID,
+      },
+    });
+
+    res.json({ configured: true });
+  }),
+);
+
+integrationsRouter.post(
+  '/integrations/elevenlabs/test',
+  attachLocalUser,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const apiKey = String(req.body?.apiKey ?? '').trim();
+    if (!apiKey) throw new ValidationError('apiKey is required');
+
+    // Scoped API keys (e.g. text_to_speech-only) lack the user_read permission needed
+    // for /v1/user, so a real (minimal) TTS call is the only reliable validity check.
+    const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${DEFAULT_ELEVENLABS_VOICE_ID}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'xi-api-key': apiKey },
+      body: JSON.stringify({ text: '.', model_id: 'eleven_multilingual_v2' }),
+    });
+
+    if (ttsRes.status === 401) {
+      const body = (await ttsRes.json().catch(() => null)) as { detail?: { status?: string } } | null;
+      if (body?.detail?.status === 'quota_exceeded') throw new ElevenLabsQuotaExceededError();
+      throw new ElevenLabsApiKeyInvalidError();
+    }
+    if (!ttsRes.ok) throw new ElevenLabsApiKeyInvalidError();
+
+    res.json({ valid: true });
+  }),
+);
+
+integrationsRouter.post(
+  '/integrations/elevenlabs/speak',
+  attachLocalUser,
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const { text } = req.body ?? {};
+    if (!text) throw new ValidationError('text is required');
+
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id } });
+    if (!user.elevenLabsApiKeyEncrypted) throw new ElevenLabsNotConfiguredError();
+
+    const apiKey = decrypt(user.elevenLabsApiKeyEncrypted);
+    const voiceId = user.elevenLabsVoiceId || DEFAULT_ELEVENLABS_VOICE_ID;
+
+    const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'xi-api-key': apiKey },
+      body: JSON.stringify({ text, model_id: 'eleven_multilingual_v2' }),
+    });
+    if (ttsRes.status === 401) {
+      const body = (await ttsRes.json().catch(() => null)) as { detail?: { status?: string } } | null;
+      if (body?.detail?.status === 'quota_exceeded') throw new ElevenLabsQuotaExceededError();
+      throw new ElevenLabsApiKeyInvalidError();
+    }
+    if (!ttsRes.ok) throw new AppError('ElevenLabsSpeakFailed', 502, { status: ttsRes.status });
+
+    const audioBuffer = Buffer.from(await ttsRes.arrayBuffer());
+    res.json({ audioUrl: `data:audio/mpeg;base64,${audioBuffer.toString('base64')}` });
   }),
 );

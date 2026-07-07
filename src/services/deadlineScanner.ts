@@ -52,6 +52,10 @@ export async function runDeadlineScan(): Promise<void> {
           minutesRemaining: Math.round((ticket.deadline.getTime() - now.getTime()) / 60000),
         });
       }
+    } else if (ticket.status === 'Warning' || ticket.status === 'Overdue') {
+      // No longer within the warning window (e.g. lead time was reduced) — demote back to Normal.
+      await prisma.ticket.update({ where: { id: ticket.id }, data: { status: 'Normal' } });
+      appEvents.emit('TicketResolved', { ticketId: ticket.id, poolId: ticket.poolId });
     }
   }
 }
