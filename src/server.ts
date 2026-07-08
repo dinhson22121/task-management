@@ -25,7 +25,7 @@ export async function startServer(): Promise<StartedServer> {
   startJiraPollScanner();
   startTicketRetentionScanner();
 
-  await new Promise<void>((resolve) => httpServer.listen(env.PORT, resolve));
+  await new Promise<void>((resolve) => httpServer.listen(env.PORT, env.HOST, resolve));
 
   return { app, httpServer, port: env.PORT };
 }

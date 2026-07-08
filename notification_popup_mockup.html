@@ -795,9 +795,18 @@
   let activePoolId = localStorage.getItem('activePoolId') || null;
   let pools = [];
 
+  let apiTokenPromise = null;
+  function getApiToken() {
+    if (!window.electronAPI?.getApiToken) return Promise.resolve(null);
+    if (!apiTokenPromise) apiTokenPromise = window.electronAPI.getApiToken();
+    return apiTokenPromise;
+  }
+
   async function api(path, options) {
     options = options || {};
+    const token = await getApiToken();
     const headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
+    if (token) headers['x-local-api-token'] = token;
     return fetch(API_BASE + path, Object.assign({}, options, { headers }));
   }
 
@@ -1072,14 +1081,14 @@
     const doneBtn = ticket.status === 'Done' ? '' : '<button class="t-btn" data-action="done" data-id="' + ticket.id + '">Done</button>';
     const noteHtml = ticket.note ? '<span class="t-note">📝 ' + escapeHtml(ticket.note) + '</span>' : '';
     const jiraStatusHtml = ticket.jiraStatus ? '<span class="badge badge-jira">' + escapeHtml(ticket.jiraStatus) + '</span>' : '';
-    return '<div class="' + rowClass + '"><div class="t-row-top"><div class="t-info"><strong>' + ticket.jiraKey + '</strong><span>' + ticket.title +
+    return '<div class="' + rowClass + '"><div class="t-row-top"><div class="t-info"><strong>' + escapeHtml(ticket.jiraKey) + '</strong><span>' + escapeHtml(ticket.title) +
       '</span>' + noteHtml + '</div><span class="t-badges">' + jiraStatusHtml + '<span class="badge ' + badgeClass + '">' + ticket.status + '</span></span></div>' +
       '<div class="t-actions">' + doneBtn + '<button class="t-btn t-btn-danger" data-action="remove" data-id="' + ticket.id + '">Remove</button></div></div>';
   }
 
   function doneTicketRowHtml(ticket) {
     const doneDate = ticket.doneAt ? new Date(ticket.doneAt).toLocaleDateString() : '';
-    return '<div class="ticket-row"><div class="t-row-top"><div class="t-info"><strong>' + ticket.jiraKey + '</strong><span>' + ticket.title +
+    return '<div class="ticket-row"><div class="t-row-top"><div class="t-info"><strong>' + escapeHtml(ticket.jiraKey) + '</strong><span>' + escapeHtml(ticket.title) +
       '</span></div><span class="badge badge-done">Done ' + doneDate + '</span></div>' +
       '<div class="t-actions"><button class="t-btn" data-action="undo" data-id="' + ticket.id + '">Undo</button>' +
       '<button class="t-btn t-btn-danger" data-action="remove" data-id="' + ticket.id + '">Remove</button></div></div>';
@@ -1301,7 +1310,7 @@
     const hasOverdue = entries.some(e => e.type === 'Overdue');
     document.getElementById('bubbleTitle').textContent = hasOverdue ? 'Ticket overdue!' : 'Deadline approaching!';
     const linksHtml = entries
-      .map(e => '<span class="bubble-ticket-link" data-url="' + (e.jiraUrl || '') + '">' + escapeHtml(e.ticketKey) + '</span>')
+      .map(e => '<span class="bubble-ticket-link" data-url="' + escapeHtml(e.jiraUrl || '') + '">' + escapeHtml(e.ticketKey) + '</span>')
       .join(', ');
     document.getElementById('bubbleSubtitle').innerHTML =
       linksHtml + (entries.length > 1 ? ' need your attention' : ' needs your attention');

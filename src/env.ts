@@ -19,7 +19,9 @@ if (tokenEncryptionKey.length !== 32) {
 
 export const env = {
   PORT: Number(process.env.PORT) || 4000,
+  HOST: process.env.HOST || '127.0.0.1',
   TOKEN_ENCRYPTION_KEY: tokenEncryptionKey,
+  LOCAL_API_TOKEN: process.env.LOCAL_API_TOKEN || '',
 
   LOCAL_USER_EMAIL: process.env.LOCAL_USER_EMAIL || 'local@device',
 
